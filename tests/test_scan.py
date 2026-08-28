@@ -1,0 +1,93 @@
+"""Diff scanners: pins, secrets, five-part comments, no raw snippets."""
+
+from __future__ import annotations
+
+import unittest
+
+from reviewer.config import load_config
+from reviewer.diff import parse_diff
+from reviewer.scan import classify_secret, scan_diff
+
+
+def _hunk(path, *added):
+    rows = list(added)
+    lines = [
+        f"diff --git a/{path} b/{path}",
+        f"--- a/{path}",
+        f"+++ b/{path}",
+        "@@ -0,0 +1,%d @@" % len(rows),
+    ]
+    for row in rows:
+        lines.append("+" + row)
+    return "\n".join(lines) + "\n"
+
+
+class ScanTests(unittest.TestCase):
+    def setUp(self):
+        self.cfg = load_config({"REVIEW_CONFIG": "/nonexistent/reviewer.json"}, root="/tmp")
+
+    def test_caret_pin_is_a_blocker(self):
+        diff = _hunk("frontend/package.json", '    "react": "^18.3.1",')
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertTrue(any(item.rule == "pin-range" and item.severity == "blocker" for item in findings))
+        joined = " ".join(item.message for item in findings)
+        self.assertNotIn("^18.3.1", joined)
+
+    def test_tilde_and_range_are_findings(self):
+        diff = _hunk("backend/requirements.txt", "flask>=2.0.0", "django~=4.2")
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertGreaterEqual(sum(1 for item in findings if item.rule == "pin-range"), 1)
+
+    def test_exact_pin_is_not_a_range_finding(self):
+        diff = _hunk("backend/requirements.txt", "flask==3.0.0")
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertFalse(any(item.rule == "pin-range" for item in findings))
+
+    def test_secret_akia_holds_and_does_not_echo(self):
+        secret = "AKIAIOSFODNN7EXAMPLE"
+        diff = _hunk("backend/app.py", f"KEY={secret}")
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        secrets = [item for item in findings if item.rule == "secret"]
+        self.assertTrue(secrets)
+        self.assertEqual(secrets[0].severity, "blocker")
+        self.assertNotIn(secret, secrets[0].message)
+        self.assertNotIn(secret, secrets[0].as_line())
+
+    def test_pem_and_reviewer_token_assignment(self):
+        self.assertEqual(classify_secret("-----BEGIN RSA PRIVATE KEY-----"), "pem-private-key")
+        self.assertEqual(
+            classify_secret("GITLAB_REVIEWER_TOKEN=glpat-aaaaaaaaaaaaaaaaaaaa"),
+            "reviewer-token-assignment",
+        )
+        self.assertEqual(classify_secret("token = os.environ['GITLAB_REVIEWER_TOKEN']"), "")
+
+    def test_new_function_without_comment_is_a_finding(self):
+        diff = _hunk("reviewer/extra.py", "def brand_new_helper():", "    return 1")
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertTrue(any("five-part" in item.rule for item in findings))
+
+    def test_new_function_with_comment_passes(self):
+        diff = _hunk(
+            "reviewer/extra.py",
+            "def brand_new_helper():",
+            '    """',
+            "    What: Helper used only in this unit test.",
+            "    Why: Prove a documented new function is not a finding.",
+            "    Who: The reviewer bot scan_diff path.",
+            "    Where: A synthetic backend module hunk.",
+            "    How: Return a constant after the five-part docstring.",
+            '    """',
+            "    return 1",
+        )
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertFalse(any(item.rule == "five-part" for item in findings))
+
+    def test_parse_diff_paths_and_line_numbers(self):
+        diff = _hunk("foo.py", "print(1)")
+        files = parse_diff(diff)
+        self.assertEqual(files[0]["path"], "foo.py")
+        self.assertEqual(files[0]["added"][0]["new_line"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

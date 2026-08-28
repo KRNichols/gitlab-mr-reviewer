@@ -1,0 +1,55 @@
+# WHAT: This repository's own GitLab pipeline: tests plus the reviewer job.
+# WHY: The bot must dogfood make ci and still run review on merge requests.
+# WHO: A GitLab runner on default-branch pushes and merge requests.
+# WHERE: .gitlab-ci.yml at the repository root.
+# HOW: test stage first, then review on merge_request_event only.
+
+workflow:
+  # WHAT: When this file starts a pipeline, and when a newer commit may cancel it.
+  # WHY: Cancel in-flight work only on merge requests, never on the default branch.
+  # WHO: GitLab pipeline scheduler.
+  # WHERE: Every pipeline created from this file.
+  # HOW: Run on MR events and the default branch. conservative cancel is MR jobs only.
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  auto_cancel:
+    on_new_commit: conservative
+
+stages:
+  - test
+  - review
+
+# WHAT: Dry-run product gate for this reviewer repository.
+# WHY: lint, comments, and unittests must stay green before the bot Approves.
+# WHO: A GitLab runner after a default-branch push or merge request.
+# WHERE: python:3.12 image running make ci.
+# HOW: Install make, then run the same three targets a laptop runs.
+test:
+  stage: test
+  image: python:3.12
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq make
+  script:
+    - make ci
+
+# WHAT: GitLab MR reviewer bot that posts one note and Approves when gates pass.
+# WHY: Required-reviewer wait is too slow; a bot should Approve a green product MR.
+# WHO: A GitLab runner on merge_request_event only, after the test job when present.
+# WHERE: This file. Never a GitHub Actions job. Token is GITLAB_REVIEWER_TOKEN.
+# HOW: python:3.12 plus curl. make review. when always so a red gate still unapproves.
+review:
+  stage: review
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl make
+  script:
+    - |
+      if [ -n "${CI_DEBUG_TRACE:-}" ]; then
+        echo "Refusing to run: CI_DEBUG_TRACE is on and would leak GITLAB_REVIEWER_TOKEN." >&2
+        exit 1
+      fi
+    - make review
