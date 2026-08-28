@@ -95,12 +95,18 @@ def _copy_defaults():
 def project_dir(env=None):
     """
     What: Consumer checkout path the scanners should treat as the project root.
-    Why: An include clone lives beside the product tree, not inside it.
+    Why: An MR must not retarget git show into an empty decoy via REVIEW_PROJECT_DIR.
     Who: load_config, local diff, allowlist, and missing-test checks.
-    Where: REVIEW_PROJECT_DIR, then CI_PROJECT_DIR, then this repository root.
-    How: Prefer the override, else the GitLab checkout, else parents of reviewer/.
+    Where: CI_PROJECT_DIR on an MR; REVIEW_PROJECT_DIR only on a laptop run.
+    How: Ignore REVIEW_PROJECT_DIR when CI_MERGE_REQUEST_IID is set; else prefer it.
     """
     data = os.environ if env is None else env
+    mr = bool(str(data.get("CI_MERGE_REQUEST_IID") or "").strip())
+    if mr:
+        hosted = str(data.get("CI_PROJECT_DIR") or "").strip()
+        if hosted:
+            return Path(hosted)
+        return Path(__file__).resolve().parents[1]
     explicit = str(data.get("REVIEW_PROJECT_DIR") or data.get("CI_PROJECT_DIR") or "").strip()
     if explicit:
         return Path(explicit)
