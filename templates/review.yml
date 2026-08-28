@@ -31,7 +31,7 @@ review:
       fi
     - git init .gitlab-mr-reviewer
     - git -C .gitlab-mr-reviewer remote add origin https://github.com/KRNichols/gitlab-mr-reviewer.git
-    - git -C .gitlab-mr-reviewer fetch --depth 1 origin feaf9583deb94c90b696964668a287a94d2d3b92
+    - git -C .gitlab-mr-reviewer fetch --depth 1 origin 313dcb801df2614d215843a3a198649f9911c990
     - git -C .gitlab-mr-reviewer checkout --detach FETCH_HEAD
   script:
     - python3 .gitlab-mr-reviewer/scripts/review_mr.py
