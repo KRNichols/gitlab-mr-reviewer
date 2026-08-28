@@ -5,6 +5,33 @@ from __future__ import annotations
 from reviewer.config import DEFAULTS
 
 PASS_STATUSES = {"success", "passed", "ok"}
+STATUS_RANK = {
+    "success": 0,
+    "passed": 0,
+    "ok": 0,
+    "warning": 1,
+    "skipped": 2,
+    "manual": 3,
+    "canceled": 3,
+    "cancelled": 3,
+    "created": 3,
+    "pending": 3,
+    "running": 3,
+    "failed": 4,
+}
+
+
+def _worse_status(current, incoming):
+    """
+    What: True when incoming job status is worse than the one already stored.
+    Why: Retries and duplicate aliases must not let a later success hide a fail.
+    Who: evaluate_jobs when it indexes the pipeline payload.
+    Where: seen[name] before the blocking-job loop.
+    How: Compare small integer ranks; unknown statuses count as not-pass.
+    """
+    return STATUS_RANK.get(str(incoming or "").strip().lower(), 3) > STATUS_RANK.get(
+        str(current or "").strip().lower(), 0
+    )
 
 
 def normalize_job_name(raw, aliases):
@@ -39,7 +66,7 @@ def evaluate_jobs(jobs, cfg=None):
             continue
         name = normalize_job_name(job.get("name"), aliases)
         status = str(job.get("status") or "").strip().lower()
-        if name:
+        if name and (name not in seen or _worse_status(seen[name], status)):
             seen[name] = status
     lines = []
     ok = True
