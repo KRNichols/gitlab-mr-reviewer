@@ -54,18 +54,42 @@ def _has_userinfo(raw, parsed):
     return "@" in hostpart
 
 
-def derive_api_root(env):
+def _host_from_ci(env):
     """
-    What: Build https://<CI_SERVER_URL host and path>/api/v4 and nothing else.
-    Why: A job-level CI_API_V4_URL override can point curl at an attacker host.
-    Who: run_review on the live merge-request path only.
-    Where: CI_SERVER_URL from GitLab, never CI_API_V4_URL.
-    How: Require https, reject userinfo, allowlist that host, append /api/v4.
+    What: Prefer CI_SERVER_HOST or CI_SERVER_FQDN as a bare hostname.
+    Why: A fully overridable CI_SERVER_URL can carry userinfo or a foreign host.
+    Who: derive_api_root before it falls back to CI_SERVER_URL.
+    Where: GitLab predefined host variables, never CI_API_V4_URL.
+    How: Take HOST then FQDN; reject slashes, at-signs, and scheme prefixes.
     """
     data = env or {}
+    raw = str(data.get("CI_SERVER_HOST") or data.get("CI_SERVER_FQDN") or "").strip()
+    if not raw:
+        return ""
+    if "://" in raw or "@" in raw or "/" in raw:
+        raise ValueError("CI_SERVER_HOST must be a hostname")
+    return raw
+
+
+def derive_api_root(env):
+    """
+    What: Build https://<allowlisted host>/api/v4 from GitLab server identity.
+    Why: A job-level CI_API_V4_URL or CI_SERVER_URL override can point curl away.
+    Who: run_review on the live merge-request path only.
+    Where: CI_SERVER_HOST or CI_SERVER_FQDN first, else a validated CI_SERVER_URL.
+    How: Force https, reject userinfo, allowlist that host, append /api/v4.
+    """
+    data = env or {}
+    host = _host_from_ci(data)
+    if host:
+        port_raw = str(data.get("CI_SERVER_PORT") or "").strip()
+        port = ""
+        if port_raw.isdigit() and port_raw not in {"443", "80"}:
+            port = f":{port_raw}"
+        return f"https://{host}{port}/api/v4"
     raw = str(data.get("CI_SERVER_URL") or "").strip()
     if not raw:
-        raise ValueError("CI_SERVER_URL is required")
+        raise ValueError("CI_SERVER_HOST or CI_SERVER_URL is required")
     parsed = urlparse(raw)
     if parsed.scheme != "https":
         raise ValueError("CI_SERVER_URL must use https")

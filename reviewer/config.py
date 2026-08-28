@@ -1,9 +1,10 @@
-"""Load reviewer.json defaults plus environment overrides."""
+"""Load reviewer.json from the protected ref; harden working-tree overlays."""
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 DEFAULTS = {
@@ -13,8 +14,6 @@ DEFAULTS = {
         "quality",
         "build",
         "security:node",
-        "test",
-        "lint",
     ],
     "non_blocking_jobs": ["security:pip", "pip-audit"],
     "job_aliases": {
@@ -25,7 +24,7 @@ DEFAULTS = {
         "security_pip": "security:pip",
         "pip-audit": "security:pip",
     },
-    "require_blocking_jobs": False,
+    "require_blocking_jobs": True,
     "pip_audit_blocks": False,
     "huge_diff_lines": 800,
     "coverage_min": 0,
@@ -63,6 +62,14 @@ DISCLAIMER = (
     "This bot grades pins, five-part comments, pipeline jobs, and artifacts. "
     "It is not a secret review and not an ATO. A red pip-audit job that does "
     "not block Approve is not a secrets-OK."
+)
+SOFT_KEYS = (
+    "job_aliases",
+    "non_blocking_jobs",
+    "huge_diff_lines",
+    "coverage_min",
+    "pin_files",
+    "path_rules",
 )
 
 
@@ -103,34 +110,181 @@ def project_dir(env=None):
     return Path(__file__).resolve().parents[1]
 
 
-def load_config(env=None, root=None):
+def parse_policy_text(text):
     """
-    What: Merge shipped defaults, optional reviewer.json, and env overrides.
-    Why: Include consumers need job-name knobs without forking the helper.
-    Who: run_review and the unit tests that inject a tiny env mapping.
-    Where: reviewer.json at the project root plus REVIEW_* variables.
-    How: Copy defaults, update from JSON when present, then apply env flags.
+    What: Parse reviewer.json bytes or text into a dict, or None on junk.
+    Why: git show and working-tree reads must fail closed on invalid JSON.
+    Who: load_config after it fetches a trusted blob or a checkout file.
+    Where: reviewer.json contents from a ref or the working tree.
+    How: json.loads; return None when the payload is not an object.
+    """
+    if text is None:
+        return None
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode("utf-8", "replace")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def trusted_ref_specs(env=None):
+    """
+    What: git show specs for reviewer.json on the target or default branch.
+    Why: The MR checkout can ship a weakened reviewer.json and must not win.
+    Who: read_trusted_policy when it walks candidate refs.
+    Where: CI_MERGE_REQUEST_TARGET_BRANCH_SHA, target name, then CI_DEFAULT_BRANCH.
+    How: Prefer the target SHA, then origin/name, then the bare branch name.
+    """
+    data = os.environ if env is None else env
+    specs = []
+    sha = str(data.get("CI_MERGE_REQUEST_TARGET_BRANCH_SHA") or "").strip()
+    if sha:
+        specs.append(f"{sha}:reviewer.json")
+    target = str(data.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or "").strip()
+    default = str(data.get("CI_DEFAULT_BRANCH") or "").strip()
+    for name in (target, default):
+        if not name:
+            continue
+        specs.append(f"origin/{name}:reviewer.json")
+        specs.append(f"{name}:reviewer.json")
+    return specs
+
+
+def git_show_text(root, spec):
+    """
+    What: Return `git show spec` stdout from root, or None when git fails.
+    Why: Trusted policy must come from the protected ref object, not HEAD.
+    Who: read_trusted_policy when no show_fn is injected.
+    Where: Consumer CI_PROJECT_DIR, spec like origin/main:reviewer.json.
+    How: subprocess git show; treat a non-zero status as a missing blob.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "show", spec],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def read_trusted_policy(root, env=None, show_fn=None):
+    """
+    What: Load reviewer.json from the first git-show spec that returns an object.
+    Why: Default-branch policy is the only file an MR is allowed to inherit fully.
+    Who: load_config before it considers the working-tree copy.
+    Where: Target SHA or default branch in the consumer repository.
+    How: Walk trusted_ref_specs; parse the first blob; skip empties and junk.
+    """
+    reader = show_fn or (lambda spec: git_show_text(root, spec))
+    for spec in trusted_ref_specs(env):
+        parsed = parse_policy_text(reader(spec))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def apply_trusted_policy(cfg, loaded):
+    """
+    What: Overlay a default-branch reviewer.json onto shipped defaults.
+    Why: Operators may add jobs or pins on the protected ref; that is trusted.
+    Who: load_config after read_trusted_policy succeeds.
+    Where: In-memory cfg before the working-tree harden pass.
+    How: Copy keys; merge severities so protected ranks replace defaults.
+    """
+    if not isinstance(loaded, dict):
+        return
+    for key, value in loaded.items():
+        if key == "severities" and isinstance(value, dict):
+            cfg["severities"].update(value)
+        else:
+            cfg[key] = value
+
+
+def apply_untrusted_policy(cfg, loaded):
+    """
+    What: Overlay a working-tree reviewer.json without weakening blockers.
+    Why: An MR can add rules but must not downgrade secret/pin-range or empty jobs.
+    Who: load_config when HEAD reviewer.json differs from the protected blob.
+    Where: The MR checkout file only; never the trusted ref.
+    How: Ignore severity downgrades, empty blocking_jobs, and require-jobs false.
+    """
+    if not isinstance(loaded, dict):
+        return
+    incoming = loaded.get("severities") or {}
+    if isinstance(incoming, dict):
+        for rule, sev in incoming.items():
+            rank = str(sev or "").strip().lower()
+            current = str((cfg.get("severities") or {}).get(rule) or "").strip().lower()
+            if current == "blocker" and rank != "blocker":
+                continue
+            if rank == "blocker":
+                cfg.setdefault("severities", {})[rule] = "blocker"
+            elif rank == "warn" and current != "blocker":
+                cfg.setdefault("severities", {})[rule] = "warn"
+    jobs = loaded.get("blocking_jobs")
+    if isinstance(jobs, list) and jobs:
+        merged = [str(item) for item in (cfg.get("blocking_jobs") or [])]
+        for name in jobs:
+            text = str(name or "").strip()
+            if text and text not in merged:
+                merged.append(text)
+        cfg["blocking_jobs"] = merged
+    if loaded.get("require_blocking_jobs") in {True, "true", "1", "yes", "on"}:
+        cfg["require_blocking_jobs"] = True
+    if loaded.get("pip_audit_blocks") in {True, "true", "1", "yes", "on"}:
+        cfg["pip_audit_blocks"] = True
+    for key in SOFT_KEYS:
+        if key in loaded:
+            cfg[key] = loaded[key]
+
+
+def load_config(env=None, root=None, show_fn=None):
+    """
+    What: Merge shipped defaults, protected-ref policy, then a hardened checkout file.
+    Why: Include consumers need knobs, but an MR-tree reviewer.json must not weaken gates.
+    Who: run_review and the unit tests that inject show_fn or a tiny env mapping.
+    Where: git show of the target ref, then reviewer.json at the project root.
+    How: Apply trusted blob fully; overlay HEAD with no severity/job weakening.
     """
     data = os.environ if env is None else env
     cfg = _copy_defaults()
     base = Path(root) if root is not None else project_dir(data)
+    mr = bool(str(data.get("CI_MERGE_REQUEST_IID") or "").strip())
+    trusted = read_trusted_policy(base, data, show_fn=show_fn)
+    if trusted is not None:
+        apply_trusted_policy(cfg, trusted)
     chosen = str(data.get("REVIEW_CONFIG") or "").strip()
-    path = Path(chosen) if chosen else base / "reviewer.json"
-    if path.is_file():
-        loaded = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            for key, value in loaded.items():
-                if key == "severities" and isinstance(value, dict):
-                    cfg["severities"].update(value)
-                else:
-                    cfg[key] = value
+    if mr:
+        tree_path = base / "reviewer.json"
+    elif chosen:
+        tree_path = Path(chosen)
+    else:
+        tree_path = base / "reviewer.json"
+    if tree_path.is_file():
+        apply_untrusted_policy(cfg, parse_policy_text(tree_path.read_text(encoding="utf-8")))
     blocking = str(data.get("REVIEW_BLOCKING_JOBS") or "").strip()
     if blocking:
-        cfg["blocking_jobs"] = [item.strip() for item in blocking.split(",") if item.strip()]
-    if "REVIEW_PIP_AUDIT_BLOCKS" in data:
-        cfg["pip_audit_blocks"] = _truthy(data.get("REVIEW_PIP_AUDIT_BLOCKS"))
+        extra = [item.strip() for item in blocking.split(",") if item.strip()]
+        if extra:
+            merged = list(cfg.get("blocking_jobs") or [])
+            for name in extra:
+                if name not in merged:
+                    merged.append(name)
+            cfg["blocking_jobs"] = merged
+    if "REVIEW_PIP_AUDIT_BLOCKS" in data and _truthy(data.get("REVIEW_PIP_AUDIT_BLOCKS")):
+        cfg["pip_audit_blocks"] = True
     if "REVIEW_REQUIRE_JOBS" in data:
-        cfg["require_blocking_jobs"] = _truthy(data.get("REVIEW_REQUIRE_JOBS"))
+        flag = _truthy(data.get("REVIEW_REQUIRE_JOBS"))
+        if flag or not mr:
+            cfg["require_blocking_jobs"] = flag
     huge = str(data.get("REVIEW_HUGE_DIFF_LINES") or "").strip()
     if huge.isdigit():
         cfg["huge_diff_lines"] = int(huge)

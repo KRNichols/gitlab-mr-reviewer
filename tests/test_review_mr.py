@@ -207,6 +207,16 @@ class ReviewTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("security:node" in line and "hold" in line for line in lines))
 
+    def test_missing_product_jobs_hold_approve(self):
+        api = FakeAPI(jobs=[{"name": "backend", "status": "success", "id": 1}])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = run_review(_mr_env(), curl_fn=api)
+        self.assertEqual(code, 1)
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("unapprove", _tails(api.calls))
+        self.assertIn("missing", buf.getvalue())
+
     def test_product_jobs_block(self):
         for field in ("backend", "frontend", "quality", "build"):
             kwargs = {field: "failed"} if field == "backend" else {field: "failed"}

@@ -4,11 +4,8 @@
 include:
   - remote: "https://raw.githubusercontent.com/KRNichols/gitlab-mr-reviewer/main/.gitlab-ci-include.yml"
 
-# Optional: pin a ref and override the clone source on the review job.
-# review:
-#   variables:
-#     GITLAB_REVIEWER_REF: "main"
-#     GITLAB_REVIEWER_REPO: "https://github.com/KRNichols/gitlab-mr-reviewer.git"
+# Do not set GITLAB_REVIEWER_REPO or GITLAB_REVIEWER_REF on the review job.
+# Bump the bot by taking a newer include file (it ships a new SHA pin).
 
 # Your product jobs go in earlier stages. The included review job uses stage .post
 # with when: always so a red backend/frontend/quality/build/node-audit still unapproves.

@@ -9,7 +9,7 @@ an ATO, and not a GitHub Actions job that Approves GitHub pull requests.
 
 ## What it does
 
-On a GitLab `merge_request_event` pipeline, after optional product jobs:
+On a GitLab `merge_request_event` pipeline, after product jobs:
 
 1. Refuses to run when `CI_DEBUG_TRACE` is on (that would leak the token).
 2. Refuses fork / other-project MRs (`CI_MERGE_REQUEST_SOURCE_PROJECT_ID` must
@@ -47,7 +47,8 @@ Shortest path that stays fail-closed:
 7. Same-project MRs only. Fork MRs are refused even if someone later exposes
    the variable.
 
-The helper derives the API root from `CI_SERVER_URL` only (`https://<host>/api/v4`).
+The helper builds the API root from `CI_SERVER_HOST` or `CI_SERVER_FQDN`
+(`https://<host>/api/v4`), and only then from a validated `CI_SERVER_URL`.
 It requires https, allowlists that host, and rejects userinfo. It does **not**
 honor a job-level `CI_API_V4_URL` override. The token is passed to curl via a
 `0600` header file (`-H @file`), never on argv.
@@ -68,23 +69,25 @@ include:
   - remote: "https://raw.githubusercontent.com/KRNichols/gitlab-mr-reviewer/main/.gitlab-ci-include.yml"
 ```
 
-The included `review` job clones this repository, then runs
-`python3 .gitlab-mr-reviewer/scripts/review_mr.py` against **your**
-`CI_PROJECT_DIR`. You do not copy the Python files.
+The included `review` job clones this repository **at a SHA shipped in the
+include file**, then runs `python3 .gitlab-mr-reviewer/scripts/review_mr.py`
+against **your** `CI_PROJECT_DIR`. You do not copy the Python files.
 
-Pin a ref:
+Do **not** set `GITLAB_REVIEWER_REPO` or `GITLAB_REVIEWER_REF` on the review
+job. Those job-level overrides are not honored (an MR must not retarget the
+clone).
 
-```yaml
-review:
-  variables:
-    GITLAB_REVIEWER_REF: "main"
-```
+**How consumers bump the pin:** take a newer `.gitlab-ci-include.yml` from this
+repo's default branch (or point the remote include at a newer commit of that
+file). The include always ships a 40-character SHA. Bump both
+`.gitlab-ci-include.yml` and `templates/review.yml` together when releasing
+this bot.
 
 GitLab CI/CD component (when this repo is mirrored to GitLab):
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<group>/gitlab-mr-reviewer/review@main
+  - component: $CI_SERVER_FQDN/<group>/gitlab-mr-reviewer/review@<sha>
 ```
 
 A full consumer sketch lives in `examples/consumer.gitlab-ci.yml`.
@@ -103,9 +106,8 @@ npm packages.
 
 | Signal | Default |
 | --- | --- |
-| `backend` / `frontend` / `quality` / `build` / `security:node` (also `node-audit`) red | Blocker if the job is present |
-| `test` / `lint` red | Blocker if present |
-| Job missing | Optional (set `REVIEW_REQUIRE_JOBS=1` to hold) |
+| `backend` / `frontend` / `quality` / `build` / `security:node` (also `node-audit`) red | Blocker |
+| Named blocking job missing | Blocker (`require_blocking_jobs` defaults **true**) |
 | `security:pip` / `pip-audit` red | Does **not** block (not a secrets-OK) |
 | Inexact pin (`^` `~` range) | Blocker |
 | New function/job/target without What/Why/Who/Where/How | Blocker |
@@ -126,9 +128,15 @@ not replace a secret scanner and it never reprints the matching text.
 
 ## Configure
 
-Optional `reviewer.json` at the consumer root (this repo ships defaults):
+Optional `reviewer.json` is loaded from the **default / target ref**
+(`git show` of `CI_MERGE_REQUEST_TARGET_BRANCH_SHA` or `CI_DEFAULT_BRANCH`),
+not from the MR HEAD. A checkout copy may add jobs or upgrade a warn to
+blocker. It cannot downgrade `secret` / `pin-range` (or other blockers) to
+warn, and it cannot empty `blocking_jobs` or turn off `require_blocking_jobs`.
 
-- `blocking_jobs` / `job_aliases` / `require_blocking_jobs`
+Trusted (protected-ref) knobs:
+
+- `blocking_jobs` / `job_aliases` / `require_blocking_jobs` (default **true**)
 - `pip_audit_blocks`
 - `huge_diff_lines`
 - `coverage_min`
@@ -136,13 +144,12 @@ Optional `reviewer.json` at the consumer root (this repo ships defaults):
 - `path_rules` (optional hooks; there are **no** F-18 / Boeing chrome rules)
 - `severities` (`blocker` or `warn` per rule)
 
-Environment overrides:
+Environment overrides (MR YAML cannot opt out of required jobs):
 
 - `REVIEW_DRY_RUN=1`
-- `REVIEW_BLOCKING_JOBS=backend,frontend`
-- `REVIEW_PIP_AUDIT_BLOCKS=1`
-- `REVIEW_REQUIRE_JOBS=1`
-- `REVIEW_CONFIG=/path/to/reviewer.json`
+- `REVIEW_BLOCKING_JOBS=extra-job` (union only; empty is ignored)
+- `REVIEW_PIP_AUDIT_BLOCKS=1` (tighten only)
+- `REVIEW_REQUIRE_JOBS=1` (tighten only on an MR; `=0` is for laptop/unit tests)
 - `REVIEW_PROJECT_DIR` (include consumers already have `CI_PROJECT_DIR`)
 
 `approved-packages.json` is optional. When present, a newly added name that is
@@ -163,7 +170,8 @@ python3 + curl only. No version ranges. No new packages.
 1. Token never on curl argv (header via `0600` file). Refuse `CI_DEBUG_TRACE`.
 2. HTTP 0 and non-2xx fail closed. Approve requires a successful MR changes
    fetch. Note write and approval writes must not treat status 0 as success.
-3. API root from `CI_SERVER_URL` only. https. Allowlisted host. No userinfo.
+3. API root from `CI_SERVER_HOST` / `CI_SERVER_FQDN`, else `CI_SERVER_URL`.
+   https. Allowlisted host. No userinfo. `CI_API_V4_URL` ignored.
 4. Summary note fences job/finding lines, strips `@`, and never echoes raw
    added diff lines.
 5. Shortest-lived Developer Project Access Token, this project, masked and
@@ -173,6 +181,12 @@ python3 + curl only. No version ranges. No new packages.
    not leave a stale Approve.
 7. Secret-like added lines hold Approve. The note states pins/jobs only. pip-audit
    skip is not secrets-OK. CI stdout does not reprint raw matching snippets.
+8. `reviewer.json` comes from the default/target ref. An MR checkout cannot
+   downgrade secret/pin-range or empty `blocking_jobs`.
+9. `require_blocking_jobs` defaults true. Missing backend/frontend/quality/build
+   /node-audit holds Approve. MR YAML cannot set `REVIEW_REQUIRE_JOBS=0`.
+10. The include job clones a SHA shipped in the include file. Job-level
+    `GITLAB_REVIEWER_REPO` / `GITLAB_REVIEWER_REF` are not used.
 
 ## What this is not
 

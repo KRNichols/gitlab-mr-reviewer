@@ -26,7 +26,7 @@ def evaluate_jobs(jobs, cfg=None):
     Why: pip-audit may stay red; node-audit and named product jobs may not.
     Who: run_review after it fetches /pipelines/:id/jobs.
     Where: blocking_jobs, non_blocking_jobs, and require_blocking_jobs.
-    How: Alias names, require present blockers to pass, and never treat pip as secrets-OK.
+    How: Alias names, require each blocker present and passing by default, ignore pip.
     """
     cfg = cfg or DEFAULTS
     aliases = cfg.get("job_aliases") or {}

@@ -41,6 +41,18 @@ class HttpTests(unittest.TestCase):
         }
         self.assertEqual(derive_api_root(env), "https://gitlab.example.com/api/v4")
 
+    def test_derive_api_root_prefers_host_over_url(self):
+        env = {
+            "CI_SERVER_HOST": "gitlab.example.com",
+            "CI_SERVER_URL": "https://evil.example",
+            "CI_API_V4_URL": "https://evil.example/api/v4",
+        }
+        self.assertEqual(derive_api_root(env), "https://gitlab.example.com/api/v4")
+
+    def test_derive_api_root_prefers_fqdn(self):
+        env = {"CI_SERVER_FQDN": "gitlab.internal.example"}
+        self.assertEqual(derive_api_root(env), "https://gitlab.internal.example/api/v4")
+
     def test_derive_api_root_rejects_http_and_userinfo(self):
         with self.assertRaises(ValueError):
             derive_api_root({"CI_SERVER_URL": "http://gitlab.example.com"})
