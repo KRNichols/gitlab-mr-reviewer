@@ -9,7 +9,7 @@ from pathlib import Path
 from reviewer.config import load_config
 from reviewer.diff import parse_diff
 from reviewer.pins import load_review_allowlist, merge_allowlists
-from reviewer.scan import classify_secret, scan_diff
+from reviewer.scan import classify_secret, description_has_story_url, scan_diff, scan_meta
 
 
 def _hunk(path, *added):
@@ -117,6 +117,97 @@ class ScanTests(unittest.TestCase):
         )
         findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
         self.assertFalse(any(item.rule == "five-part" for item in findings))
+
+    def test_labels_alone_are_not_enough(self):
+        diff = _hunk(
+            "reviewer/extra.py",
+            "def brand_new_helper():",
+            '    """',
+            "    What: helper",
+            "    Why: helper",
+            "    Who: us",
+            "    Where: here",
+            "    How: return 1",
+            '    """',
+            "    return 1",
+        )
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        hits = [item for item in findings if item.rule == "five-part"]
+        self.assertTrue(hits)
+        self.assertEqual(hits[0].severity, "blocker")
+        joined = " ".join(item.message for item in hits)
+        self.assertIn("fails", joined)
+
+    def test_placeholder_five_part_is_a_finding(self):
+        diff = _hunk(
+            "reviewer/extra.py",
+            "def brand_new_helper():",
+            '    """',
+            "    What: Placeholder helper used by the unit test.",
+            "    Why: TODO fill this in after review.",
+            "    Who: The reviewer bot scan_diff path.",
+            "    Where: A synthetic backend module hunk.",
+            "    How: Return a constant after the five-part docstring.",
+            '    """',
+            "    return 1",
+        )
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertTrue(any(item.rule == "five-part" for item in findings))
+
+    def test_what_equals_why_is_a_finding(self):
+        diff = _hunk(
+            "reviewer/extra.py",
+            "def brand_new_helper():",
+            '    """',
+            "    What: Validates the inbound payload shape.",
+            "    Why: Validates the inbound payload shape.",
+            "    Who: The reviewer bot scan_diff path.",
+            "    Where: A synthetic backend module hunk.",
+            "    How: Return a constant after the five-part docstring.",
+            '    """',
+            "    return 1",
+        )
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertTrue(any("WHAT equals WHY" in item.message for item in findings if item.rule == "five-part"))
+
+    def test_how_copies_body_is_a_finding(self):
+        diff = _hunk(
+            "reviewer/extra.py",
+            "def brand_new_helper():",
+            '    """',
+            "    What: Helper used only in this unit test.",
+            "    Why: Prove a copied HOW line is still a finding.",
+            "    Who: The reviewer bot scan_diff path.",
+            "    Where: A synthetic backend module hunk.",
+            "    How: return 1",
+            '    """',
+            "    return 1",
+        )
+        findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
+        self.assertTrue(any("HOW copies body" in item.message for item in findings if item.rule == "five-part"))
+
+    def test_story_url_rejects_bare_ids_and_badges(self):
+        self.assertFalse(description_has_story_url(""))
+        self.assertFalse(description_has_story_url("Ready for review. ADO-1234 see the wiki."))
+        self.assertFalse(description_has_story_url("![ci](https://img.shields.io/badge/build-ok-green)"))
+        self.assertTrue(description_has_story_url("Story: https://dev.azure.com/org/proj/_workitems/edit/88"))
+        self.assertTrue(description_has_story_url("[Login](https://jira.example.com/browse/PD-88)"))
+
+    def test_scan_meta_missing_story_url_is_blocker(self):
+        findings = scan_meta([], "Ready for review. ADO-1234", self.cfg)
+        hits = [item for item in findings if item.rule == "missing-story-link"]
+        self.assertTrue(hits)
+        self.assertEqual(hits[0].severity, "blocker")
+        self.assertFalse(any(item.rule == "empty-description" for item in findings))
+
+    def test_scan_meta_empty_description_stays_empty_rule(self):
+        findings = scan_meta([], "   ", self.cfg)
+        self.assertTrue(any(item.rule == "empty-description" for item in findings))
+        self.assertFalse(any(item.rule == "missing-story-link" for item in findings))
+
+    def test_scan_meta_markdown_story_link_passes(self):
+        findings = scan_meta([], "Story: [PD-88](https://jira.example.com/browse/PD-88)", self.cfg)
+        self.assertFalse(any(item.rule in {"missing-story-link", "empty-description"} for item in findings))
 
     def test_parse_diff_paths_and_line_numbers(self):
         diff = _hunk("foo.py", "print(1)")
