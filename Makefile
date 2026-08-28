@@ -2,16 +2,16 @@
 # WHY: Humans and hosted CI must type the same words or the gates drift.
 # WHO: Developers and the GitLab test and review jobs.
 # WHERE: Repository root. Each target calls one script.
-# HOW: Prerequisite expansion for ci; recipe lines for the other four names.
+# HOW: Prerequisite expansion for ci; recipe lines for the named targets.
 
-.PHONY: ci lint comments test review
+.PHONY: ci lint comments include-pin pin test review
 
 # WHAT: Portable product contract for this reviewer repository.
-# WHY: GitLab and a laptop must run the same three gates before merge.
+# WHY: GitLab and a laptop must run the same four gates before merge.
 # WHO: make ci and the hosted test job.
-# WHERE: lint, then comments, then test.
-# HOW: Expand the three prerequisite targets in that gate order.
-ci: lint comments test
+# WHERE: lint, comments, include-pin, then test.
+# HOW: Expand the four prerequisite targets in that gate order.
+ci: lint comments include-pin test
 
 # WHAT: Syntax check for first-party Python without extra packages.
 # WHY: A syntax error should fail before reviewer tests run.
@@ -28,6 +28,22 @@ lint:
 # HOW: Run the comment checker with the all-files flag.
 comments:
 	python3 scripts/check_comments.py --all
+
+# WHAT: Fail when the include clone SHA is not HEAD (or a pin-only follow-up).
+# WHY: A stale pin leaves consumers on pre-closure helper code.
+# WHO: make ci and anyone cutting a bot release.
+# WHERE: scripts/check_include_pin.py over both include YAML files.
+# HOW: Compare the shared fetch SHA to git rev-parse HEAD.
+include-pin:
+	python3 scripts/check_include_pin.py
+
+# WHAT: Rewrite both include fetch lines to the current HEAD object name.
+# WHY: Operators need one command after a squash so the pin ships that commit.
+# WHO: A maintainer preparing the self-pin follow-up commit.
+# WHERE: .gitlab-ci-include.yml and templates/review.yml fetch origin lines.
+# HOW: Delegate --write so both files receive the same 40-hex SHA.
+pin:
+	python3 scripts/check_include_pin.py --write
 
 # WHAT: Stdlib unittest suite for reviewer behavior and red-team holes.
 # WHY: Approve, unapprove, token, and note rules must stay proven.

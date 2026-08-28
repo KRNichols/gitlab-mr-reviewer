@@ -5,8 +5,9 @@
 # HOW: Clone this repo at the shipped SHA and run the helper against CI_PROJECT_DIR.
 #
 # Consumers bump the pin by taking a newer copy of THIS file from the bot
-# default branch (or bumping their remote include). Do not set job-level
-# GITLAB_REVIEWER_REPO or GITLAB_REVIEWER_REF — those are ignored here.
+# default branch (or bumping their remote include). The fetch SHA must equal
+# the commit that ships this file (make include-pin / HEAD). Do not set
+# job-level GITLAB_REVIEWER_REPO or GITLAB_REVIEWER_REF — those are ignored.
 
 # WHAT: Reviewer job that runs last and still unapproves on a red product gate.
 # WHY: .post is a built-in GitLab stage, so consumers need not declare review.

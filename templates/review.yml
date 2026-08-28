@@ -15,7 +15,7 @@ spec:
 # WHY: Product pipelines need a required reviewer without a job-level repo override.
 # WHO: merge_request_event pipelines that include this component.
 # WHERE: The including project's .post stage unless inputs.stage is changed.
-# HOW: Install curl and git, refuse debug trace, fetch the pinned SHA, run the helper.
+# HOW: Install curl and git, refuse debug trace, fetch HEAD's shipped SHA, run the helper.
 review:
   stage: $[[ inputs.stage ]]
   image: python:3.12

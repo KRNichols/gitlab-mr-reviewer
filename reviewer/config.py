@@ -64,11 +64,9 @@ DISCLAIMER = (
     "not block Approve is not a secrets-OK."
 )
 SOFT_KEYS = (
-    "job_aliases",
     "non_blocking_jobs",
     "huge_diff_lines",
     "coverage_min",
-    "pin_files",
     "path_rules",
 )
 
@@ -131,17 +129,14 @@ def parse_policy_text(text):
 
 def trusted_ref_specs(env=None):
     """
-    What: git show specs for reviewer.json on the target or default branch.
-    Why: The MR checkout can ship a weakened reviewer.json and must not win.
+    What: git show specs for reviewer.json on the target or default branch name.
+    Why: A job-overridable target SHA must not select a weakened policy blob.
     Who: read_trusted_policy when it walks candidate refs.
-    Where: CI_MERGE_REQUEST_TARGET_BRANCH_SHA, target name, then CI_DEFAULT_BRANCH.
-    How: Prefer the target SHA, then origin/name, then the bare branch name.
+    Where: origin/target and origin/default names. Not TARGET_BRANCH_SHA.
+    How: Build origin/name then bare name specs and skip empty branch names.
     """
     data = os.environ if env is None else env
     specs = []
-    sha = str(data.get("CI_MERGE_REQUEST_TARGET_BRANCH_SHA") or "").strip()
-    if sha:
-        specs.append(f"{sha}:reviewer.json")
     target = str(data.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or "").strip()
     default = str(data.get("CI_DEFAULT_BRANCH") or "").strip()
     for name in (target, default):
@@ -191,59 +186,113 @@ def read_trusted_policy(root, env=None, show_fn=None):
     return None
 
 
-def apply_trusted_policy(cfg, loaded):
+def _apply_severities_no_downgrade(cfg, incoming):
     """
-    What: Overlay a default-branch reviewer.json onto shipped defaults.
-    Why: Operators may add jobs or pins on the protected ref; that is trusted.
-    Who: load_config after read_trusted_policy succeeds.
-    Where: In-memory cfg before the working-tree harden pass.
-    How: Copy keys; merge severities so protected ranks replace defaults.
+    What: Merge severity ranks without turning a blocker into a warn.
+    Why: Neither checkout nor a job-overridable trusted blob may weaken secret.
+    Who: _merge_policy for both trusted and untrusted overlays.
+    Where: cfg['severities'] after DEFAULTS are copied.
+    How: Skip a non-blocker incoming rank when the current rank is already blocker.
+    """
+    if not isinstance(incoming, dict):
+        return
+    ranks = cfg.setdefault("severities", {})
+    for rule, sev in incoming.items():
+        rank = str(sev or "").strip().lower()
+        current = str(ranks.get(rule) or "").strip().lower()
+        if current == "blocker" and rank != "blocker":
+            continue
+        if rank == "blocker":
+            ranks[rule] = "blocker"
+        elif rank == "warn" and current != "blocker":
+            ranks[rule] = "warn"
+
+
+def _union_str_list(existing, incoming):
+    """
+    What: Append new non-empty names onto an existing list, or keep existing.
+    Why: An empty incoming list must not wipe blockers or pin manifests.
+    Who: _merge_policy when it merges blocking_jobs and pin_files.
+    Where: In-memory cfg lists during load_config.
+    How: Copy existing names, then add stripped incoming names that are new.
+    """
+    merged = [str(item) for item in (existing or [])]
+    if not isinstance(incoming, list) or not incoming:
+        return merged
+    for name in incoming:
+        text = str(name or "").strip()
+        if text and text not in merged:
+            merged.append(text)
+    return merged
+
+
+def _merge_alias_additions(cfg, incoming):
+    """
+    What: Add new job alias keys that do not map a dummy name onto a blocker.
+    Why: dummy→backend would let a no-op job satisfy a required product gate.
+    Who: _merge_policy when the blob is a protected-ref file.
+    Where: cfg['job_aliases'] after DEFAULTS (and any earlier merge).
+    How: Keep existing keys; add a new key only when its target is not a blocker.
+    """
+    if not isinstance(incoming, dict):
+        return
+    blockers = {str(item) for item in (cfg.get("blocking_jobs") or [])}
+    table = dict(cfg.get("job_aliases") or {})
+    for raw, dest in incoming.items():
+        src = str(raw or "").strip()
+        dst = str(dest or "").strip()
+        if not src or not dst or src in table:
+            continue
+        if dst in blockers:
+            continue
+        table[src] = dst
+    cfg["job_aliases"] = table
+
+
+def _merge_policy(cfg, loaded, allow_aliases):
+    """
+    What: Apply one reviewer.json overlay with DEFAULTS-hardening on both paths.
+    Why: Trusted and untrusted blobs share the no-downgrade / no-empty rules.
+    Who: apply_trusted_policy and apply_untrusted_policy.
+    Where: In-memory cfg inside load_config.
+    How: Union jobs and pins, tighten flags, copy only remaining soft keys.
     """
     if not isinstance(loaded, dict):
         return
-    for key, value in loaded.items():
-        if key == "severities" and isinstance(value, dict):
-            cfg["severities"].update(value)
-        else:
-            cfg[key] = value
+    _apply_severities_no_downgrade(cfg, loaded.get("severities") or {})
+    cfg["blocking_jobs"] = _union_str_list(cfg.get("blocking_jobs"), loaded.get("blocking_jobs"))
+    cfg["pin_files"] = _union_str_list(cfg.get("pin_files"), loaded.get("pin_files"))
+    if loaded.get("require_blocking_jobs") in {True, "true", "1", "yes", "on"}:
+        cfg["require_blocking_jobs"] = True
+    if loaded.get("pip_audit_blocks") in {True, "true", "1", "yes", "on"}:
+        cfg["pip_audit_blocks"] = True
+    if allow_aliases:
+        _merge_alias_additions(cfg, loaded.get("job_aliases"))
+    for key in SOFT_KEYS:
+        if key in loaded:
+            cfg[key] = loaded[key]
+
+
+def apply_trusted_policy(cfg, loaded):
+    """
+    What: Overlay a default-branch reviewer.json without weakening shipped defaults.
+    Why: A job-overridable trusted ref must not downgrade secret or empty blockers.
+    Who: load_config after read_trusted_policy succeeds.
+    Where: In-memory cfg before the working-tree harden pass.
+    How: Reuse the same no-downgrade merge as untrusted, including pin union.
+    """
+    _merge_policy(cfg, loaded, allow_aliases=True)
 
 
 def apply_untrusted_policy(cfg, loaded):
     """
     What: Overlay a working-tree reviewer.json without weakening blockers.
-    Why: An MR can add rules but must not downgrade secret/pin-range or empty jobs.
+    Why: An MR can add rules but must not remap jobs, empty pins, or drop blockers.
     Who: load_config when HEAD reviewer.json differs from the protected blob.
     Where: The MR checkout file only; never the trusted ref.
-    How: Ignore severity downgrades, empty blocking_jobs, and require-jobs false.
+    How: Ignore aliases, union pins, and refuse severity or job weakening.
     """
-    if not isinstance(loaded, dict):
-        return
-    incoming = loaded.get("severities") or {}
-    if isinstance(incoming, dict):
-        for rule, sev in incoming.items():
-            rank = str(sev or "").strip().lower()
-            current = str((cfg.get("severities") or {}).get(rule) or "").strip().lower()
-            if current == "blocker" and rank != "blocker":
-                continue
-            if rank == "blocker":
-                cfg.setdefault("severities", {})[rule] = "blocker"
-            elif rank == "warn" and current != "blocker":
-                cfg.setdefault("severities", {})[rule] = "warn"
-    jobs = loaded.get("blocking_jobs")
-    if isinstance(jobs, list) and jobs:
-        merged = [str(item) for item in (cfg.get("blocking_jobs") or [])]
-        for name in jobs:
-            text = str(name or "").strip()
-            if text and text not in merged:
-                merged.append(text)
-        cfg["blocking_jobs"] = merged
-    if loaded.get("require_blocking_jobs") in {True, "true", "1", "yes", "on"}:
-        cfg["require_blocking_jobs"] = True
-    if loaded.get("pip_audit_blocks") in {True, "true", "1", "yes", "on"}:
-        cfg["pip_audit_blocks"] = True
-    for key in SOFT_KEYS:
-        if key in loaded:
-            cfg[key] = loaded[key]
+    _merge_policy(cfg, loaded, allow_aliases=False)
 
 
 def load_config(env=None, root=None, show_fn=None):
@@ -252,7 +301,7 @@ def load_config(env=None, root=None, show_fn=None):
     Why: Include consumers need knobs, but an MR-tree reviewer.json must not weaken gates.
     Who: run_review and the unit tests that inject show_fn or a tiny env mapping.
     Where: git show of the target ref, then reviewer.json at the project root.
-    How: Apply trusted blob fully; overlay HEAD with no severity/job weakening.
+    How: Apply both blobs with no severity downgrade and no emptied blockers.
     """
     data = os.environ if env is None else env
     cfg = _copy_defaults()
