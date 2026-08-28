@@ -19,7 +19,7 @@ from reviewer.http import (
 )
 from reviewer.jobs import evaluate_jobs
 from reviewer.notes import action_text, build_note, upsert_inline_discussions, upsert_summary_note
-from reviewer.pins import load_allowlist
+from reviewer.pins import load_review_allowlist
 from reviewer.scan import scan_diff, scan_meta
 
 VERDICT_LABELS = {
@@ -227,7 +227,7 @@ def _print_note(note):
     print(note)
 
 
-def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None):
+def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None, show_fn=None):
     """
     What: Run the reviewer: dry-run locally, or note plus Approve on a GitLab MR.
     Why: make review and the hosted job must share one helper and one verdict.
@@ -245,8 +245,8 @@ def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None):
     token = str(data.get("GITLAB_REVIEWER_TOKEN") or "").strip()
     mr = is_mr_context(data)
     dry = is_dry_run(data)
-    cfg = load_config(data)
     root = project_dir(data)
+    cfg = load_config(data, root=root, show_fn=show_fn)
     if mr and not dry and not is_same_project_mr(data):
         print(
             "Refusing: this bot reviews same-project merge requests only "
@@ -260,8 +260,8 @@ def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None):
     if dry:
         diff_text = (local_diff_fn or local_diff)(root)
         files = parse_diff(diff_text)
-        allow = load_allowlist(root / "approved-packages.json")
-        findings = scan_diff(files, allow=allow, cfg=cfg, root=root)
+        allow = load_review_allowlist(root, data, show_fn=show_fn)
+        findings = scan_diff(files, allow=allow, cfg=cfg, root=root, env=data, show_fn=show_fn)
         local_desc = data.get("CI_MERGE_REQUEST_DESCRIPTION")
         if local_desc is None:
             local_desc = "(dry-run)"
@@ -333,8 +333,8 @@ def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None):
         if not refs:
             refs = diff_refs_of(mr_payload)
     description = description or data.get("CI_MERGE_REQUEST_DESCRIPTION") or ""
-    allow = load_allowlist(root / "approved-packages.json")
-    findings.extend(scan_diff(files, allow=allow, cfg=cfg, root=root))
+    allow = load_review_allowlist(root, data, show_fn=show_fn)
+    findings.extend(scan_diff(files, allow=allow, cfg=cfg, root=root, env=data, show_fn=show_fn))
     findings.extend(scan_meta(files, description, cfg))
     jobs = jobs_payload(jobs_raw) if jobs_fetch_ok else []
     if not jobs_fetch_ok:

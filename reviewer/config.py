@@ -67,7 +67,6 @@ SOFT_KEYS = (
     "non_blocking_jobs",
     "huge_diff_lines",
     "coverage_min",
-    "path_rules",
 )
 
 
@@ -127,23 +126,24 @@ def parse_policy_text(text):
     return data if isinstance(data, dict) else None
 
 
-def trusted_ref_specs(env=None):
+def trusted_ref_specs(env=None, filename="reviewer.json"):
     """
-    What: git show specs for reviewer.json on the target or default branch name.
-    Why: A job-overridable target SHA must not select a weakened policy blob.
-    Who: read_trusted_policy when it walks candidate refs.
+    What: git show specs for a named blob on the target or default branch name.
+    Why: reviewer.json and approved-packages.json must use the same protected refs.
+    Who: read_trusted_policy and read_trusted_allowlist when they walk candidates.
     Where: origin/target and origin/default names. Not TARGET_BRANCH_SHA.
     How: Build origin/name then bare name specs and skip empty branch names.
     """
     data = os.environ if env is None else env
+    name = str(filename or "reviewer.json").strip() or "reviewer.json"
     specs = []
     target = str(data.get("CI_MERGE_REQUEST_TARGET_BRANCH_NAME") or "").strip()
     default = str(data.get("CI_DEFAULT_BRANCH") or "").strip()
-    for name in (target, default):
-        if not name:
+    for branch in (target, default):
+        if not branch:
             continue
-        specs.append(f"origin/{name}:reviewer.json")
-        specs.append(f"{name}:reviewer.json")
+        specs.append(f"origin/{branch}:{name}")
+        specs.append(f"{branch}:{name}")
     return specs
 
 
@@ -208,6 +208,29 @@ def _apply_severities_no_downgrade(cfg, incoming):
             ranks[rule] = "warn"
 
 
+def _union_path_rules(existing, incoming):
+    """
+    What: Append new path_rules dicts onto the current list, or keep current.
+    Why: An MR must not replace or empty consumer path hooks from HEAD.
+    Who: _merge_policy for both trusted and untrusted overlays.
+    Where: cfg['path_rules'] during load_config.
+    How: Keep existing dicts; add incoming dicts whose JSON form is not present.
+    """
+    merged = [item for item in (existing or []) if isinstance(item, dict)]
+    if not isinstance(incoming, list) or not incoming:
+        return merged
+    seen = {json.dumps(item, sort_keys=True) for item in merged}
+    for rule in incoming:
+        if not isinstance(rule, dict):
+            continue
+        key = json.dumps(rule, sort_keys=True)
+        if key in seen:
+            continue
+        merged.append(rule)
+        seen.add(key)
+    return merged
+
+
 def _union_str_list(existing, incoming):
     """
     What: Append new non-empty names onto an existing list, or keep existing.
@@ -255,7 +278,7 @@ def _merge_policy(cfg, loaded, allow_aliases):
     Why: Trusted and untrusted blobs share the no-downgrade / no-empty rules.
     Who: apply_trusted_policy and apply_untrusted_policy.
     Where: In-memory cfg inside load_config.
-    How: Union jobs and pins, tighten flags, copy only remaining soft keys.
+    How: Union jobs, pins, and path_rules, then copy only remaining soft keys.
     """
     if not isinstance(loaded, dict):
         return
@@ -268,6 +291,7 @@ def _merge_policy(cfg, loaded, allow_aliases):
         cfg["pip_audit_blocks"] = True
     if allow_aliases:
         _merge_alias_additions(cfg, loaded.get("job_aliases"))
+    cfg["path_rules"] = _union_path_rules(cfg.get("path_rules"), loaded.get("path_rules"))
     for key in SOFT_KEYS:
         if key in loaded:
             cfg[key] = loaded[key]
@@ -290,7 +314,7 @@ def apply_untrusted_policy(cfg, loaded):
     Why: An MR can add rules but must not remap jobs, empty pins, or drop blockers.
     Who: load_config when HEAD reviewer.json differs from the protected blob.
     Where: The MR checkout file only; never the trusted ref.
-    How: Ignore aliases, union pins, and refuse severity or job weakening.
+    How: Ignore aliases, union pins and path_rules, and refuse job weakening.
     """
     _merge_policy(cfg, loaded, allow_aliases=False)
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import io
+import json
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -373,6 +375,79 @@ class ReviewTests(unittest.TestCase):
         code = run_review(_mr_env(), curl_fn=api)
         self.assertEqual(code, 0)
         self.assertIn("approve", _tails(api.calls))
+
+    def test_mr_empty_allowlist_cannot_approve_when_protected_list_exists(self):
+        trusted = json.dumps({"backend": {"flask": "==3.0.0"}, "frontend": {}})
+        diff = (
+            "@@ -1,1 +1,2 @@\n"
+            " flask==3.0.0\n"
+            "+requests==2.31.0\n"
+        )
+        changes = {
+            "diff_refs": _refs(),
+            "changes": [
+                {
+                    "old_path": "requirements.txt",
+                    "new_path": "requirements.txt",
+                    "diff": diff,
+                }
+            ],
+        }
+
+        def show_fn(spec):
+            if spec.endswith("approved-packages.json"):
+                return trusted
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "approved-packages.json").write_text("{}", encoding="utf-8")
+            api = FakeAPI(changes=changes)
+            env = _mr_env(
+                REVIEW_PROJECT_DIR=str(root),
+                CI_DEFAULT_BRANCH="main",
+            )
+            code = run_review(env, curl_fn=api, show_fn=show_fn)
+        self.assertEqual(code, 1)
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("unapprove", _tails(api.calls))
+
+    def test_mr_deleted_allowlist_cannot_approve_when_protected_list_exists(self):
+        trusted = json.dumps({"frontend": {"react": "18.3.1"}})
+        diff = (
+            "@@ -1,3 +1,4 @@\n"
+            " {\n"
+            '   "name": "app",\n'
+            '+  "lodash": "4.17.21",\n'
+            " }\n"
+        )
+        changes = {
+            "diff_refs": _refs(),
+            "changes": [
+                {
+                    "old_path": "package.json",
+                    "new_path": "package.json",
+                    "diff": diff,
+                }
+            ],
+        }
+
+        def show_fn(spec):
+            if spec.endswith("approved-packages.json"):
+                return trusted
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            api = FakeAPI(changes=changes)
+            env = _mr_env(
+                REVIEW_PROJECT_DIR=str(root),
+                CI_DEFAULT_BRANCH="main",
+            )
+            code = run_review(env, curl_fn=api, show_fn=show_fn)
+        self.assertEqual(code, 1)
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("unapprove", _tails(api.calls))
 
 
 def json_safe(value):
