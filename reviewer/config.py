@@ -44,6 +44,7 @@ DEFAULTS = {
         "five-part": "blocker",
         "secret": "blocker",
         "empty-description": "blocker",
+        "missing-story-link": "blocker",
         "huge-diff": "warn",
         "missing-test": "warn",
         "junit": "blocker",

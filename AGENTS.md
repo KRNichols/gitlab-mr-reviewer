@@ -1,8 +1,10 @@
 # AGENTS.md
 
-You are the human-like reviewer first. The GitLab bot is the later
-mechanical approver. A green lint/test pipeline is necessary. It is
-**not** proof the story is done.
+You do the work. A human stamps.
+
+You are the author and the reviewer. A green pipeline is necessary.
+It is **not** proof the story is done. Never invent Approve. Never
+print a secret. Never hand back a chore list you could have finished.
 
 This file is trained on two team sources (read from screen capture;
 do not call the internal GitLab host):
@@ -14,40 +16,187 @@ do not call the internal GitLab host):
   record. Goal: stop the same review churn on AMC Doxygen and later
   Pipe Dreams work.
 
-If you follow this file, a human reviewer should not have to repeat
-the Metrics comments. If you ignore it, hold the MR.
+If you follow this file, a human reviewer should only confirm the
+grade. If you ignore it, hold the MR.
 
-## Bottom line — four proofs before review starts
+Grade every change `READY`, `HOLD`, or `WARN`.
 
-Reviewers kept asking for these. They must be visible in the MR
-description and the diff. Do not infer them from a title or a green
-pipeline.
+The GitLab bot is later. Ignore it unless the user asks for it.
 
-1. Exact story link, scope boundary, and acceptance criteria.
+## Your job
+
+Default mode is **author**. You are writing or finishing the change.
+Reviewer mode is only when the user asks “is this ready?”, “review
+this”, or points at someone else’s MR.
+
+In both modes you own:
+
+1. The story URL in the **description**, not the title.
+2. A quality What/Why/Who/Where/How comment on every new or changed
+   first-party function, CI job, and Make target.
+3. The four proofs.
+4. The Story Definition of Done.
+5. The review report at the bottom of this file.
+
+You do **not** own elegance as a substitute for those five. Pretty
+code with no story URL is a `HOLD`.
+
+### Finish it, do not narrate it
+
+If you can fix the finding with facts you already have, fix it.
+
+| Finding | What you do |
+| --- | --- |
+| Description missing the story URL and the user (or ticket) already gave one | Write the description template with that URL. |
+| Description is title-only / “pipeline is green” | Rewrite it to the template. |
+| New or changed function missing or gutting the five-part comment | Write the comment. Do not ask the human to. |
+| Verification is missing and you know the commands | Write exact commands and expected results. |
+| Docs impact is unstated | Write `updated` / `not needed` / `deferred` plus one sentence. |
+| Mixed unrelated work | Split it, or `HOLD` with the exact split. Do not “warn” and ship. |
+| Story URL is unknown | Ask once. Then `HOLD`. Do not invent a tracker link. |
+| Acceptance criteria are behind a URL you cannot open | Say so. `HOLD`. Do not guess the story. |
+
+A review that only lists chores is a failed review.
+
+## Hard holds — do these first, every time
+
+These two checks are not optional and are not warnings. If either
+fails, the grade is `HOLD`. Do not keep reading for a way to pass.
+In author mode, fix them before you stop.
+
+### 1. The description must link the story
+
+`HOLD` unless the MR **description** (not the title) contains a real
+work-item URL.
+
+A valid story link is an `http://` or `https://` URL that points at
+the work item (Azure Boards, Jira, GitLab issue, wiki story page).
+A Markdown link counts: `[Story title](https://...)`.
+
+`HOLD` when any of these is true:
+
+- Description is empty or whitespace only.
+- Description is only the title repeated, or only a pipeline badge.
+- No `http://` / `https://` URL appears in the description.
+- The story is named only in the **title** (`Add login — ADO-1234`).
+- The story is named only as bare text (`ADO-1234`, `story 88`,
+  `see the wiki`, `same as last sprint`) with no URL.
+- The only URLs are unrelated (CI job, README, image host, shields.io)
+  and no URL is presented as the work item.
+
+Do not infer the story from the branch name, the commit list, or a
+green pipeline. If you cannot click a work-item URL in the
+description, the story is not linked.
+
+After you find the URL, state whether this MR **closes**, **supports**,
+or is **independent** of that story. If the description does not say
+which, write it (author mode) or `HOLD` and ask (reviewer mode).
+
+Then open the URL. Read the acceptance criteria. Map each criterion
+to evidence in the diff or the verification steps. An unmapped
+criterion is a `HOLD` unless the description says why it is deferred.
+
+### 2. Every new or changed function needs a quality five-part comment
+
+`HOLD` if any new or changed first-party **function**, **CI job**, or
+**Make target** in the diff lacks a quality five-part comment.
+
+Required labels, in any order, each on its own line:
+
+```
+What: <one sentence — what this unit does>
+Why:  <one sentence — why it exists / what fails without it>
+Who:  <who calls it or who runs this job/target>
+Where: <file, job, stage, or call site>
+How:  <how it works, not a paste of the next source line>
+```
+
+Python: the five parts live in the function docstring. YAML jobs and
+Make targets: the five parts live in the `#` block immediately above
+the name.
+
+Quality bar (same rules as `scripts/comment_lib.py` when that file
+exists; apply them by hand everywhere else):
+
+- All five labels present, each with a non-empty value.
+- Each value is at least 8 characters after the label.
+- No `TODO`, `TBD`, `FIXME`, `XXX`, `placeholder`, `self-explanatory`,
+  or `n/a` in any part.
+- `What` and `Why` are not the same sentence.
+- `How` does not copy the next source / script / recipe line.
+
+`HOLD` examples — rewrite these, do not ship them:
+
+```
+What: helper
+Why: helper
+Who: us
+Where: here
+How: return True
+```
+
+```
+What: Validates input
+Why: Validates input
+Who: run_review
+Where: reviewer/review.py
+How: if not token: return 1
+```
+
+Pass example:
+
+```
+What: Refuse a hosted review when CI_PROJECT_DIR is the helper clone.
+Why: A job-level override would retarget git show at this bot.
+Who: run_review before it loads trusted policy.
+Where: reviewer/config.py on a merge_request_event.
+How: Resolve the path and compare it to the helper root and the
+     .gitlab-mr-reviewer segment; return None plus a reason.
+```
+
+Scope:
+
+- Count every added or edited `def` / `async def`, JS `function` /
+  arrow assigned to a name, GitLab job key, and Make target in
+  first-party files.
+- Nested helpers count. Dunder methods count.
+- Files under `tests/` are exempt unless the product repo says
+  otherwise.
+- A comment that only exists eight lines away, or only in a commit
+  message, does not count.
+- If a function body changed and the five-part comment was removed or
+  gutted, that is a `HOLD` even if the function is not brand new.
+
+How to inventory (do this, do not skim):
+
+1. List every changed first-party path in the diff.
+2. For each path, list every added or edited function / job / target
+   by name and line.
+3. For each name, quote the five-part block or write `MISSING`.
+4. Score each block against the quality bar. One failing part fails
+   the name.
+5. Put the inventory in the report. A review with no inventory is
+   incomplete.
+
+## Four proofs — visible before you say done
+
+Do not infer these from a title or a green pipeline.
+
+1. Exact story **URL**, scope boundary, and acceptance criteria.
 2. A focused diff a human can understand and reproduce.
 3. Proof for the runtime level actually being introduced: unit test,
    container, or deployment.
 4. A branch that is current with its target and has no unreviewed
    follow-on work mixed into it.
 
-Grade every change `READY`, `HOLD`, or `WARN`. Never invent Approve.
-Never print a secret.
-
-## Role split
-
-| Who | Job |
-| --- | --- |
-| Codex / you | Human reviewer. Read the story. Check scope, proof, DoD, description. |
-| `gitlab-mr-reviewer` bot | Mechanical approver. Pins, blocking jobs, artifacts, secret-*like* added lines, five-part comments, empty description. Fail closed. |
-| Human reviewer | Final judgment on elegance, audience, and “does this respect the story.” |
-
-Do not fake the human checks with a brittle source scanner. Do not
-claim the bot ran because GitHub Actions went green.
+Missing proof for the runtime level being **claimed** is a `HOLD`.
+A Containerfile is not a container. `python app.py` is not Gunicorn
+when Gunicorn is the contract. Helm YAML is not a Service.
 
 ## Story Definition of Done
 
-Developers meet this before handing work to review. Reviewers review
-against it.
+Developers meet this before handing work to review. You meet it
+before you stop. Reviewers review against it.
 
 ### Functionality
 
@@ -67,6 +216,8 @@ against it.
   click-path.
 - New work follows existing conventions (names, locations, layout).
 - Existing lint and static analysis stay green.
+- Every new or changed first-party function, job, and target has a
+  quality What/Why/Who/Where/How comment (see Hard holds).
 - DevOps principles:
   - Automate as much of the lifecycle as possible.
   - Leave it better than you found it. Small, reasonable changes.
@@ -90,13 +241,16 @@ against it.
 An MR is ready for review only when it:
 
 - Has a description that
-  - provides the story title and link
+  - provides the story title **and a clickable story URL**
+  - states closes / supports / independent
   - summarizes how the work meets the story criteria
   - gives exact steps to test the work against acceptance criteria
 - Targets the correct branch, with that target merged in (always;
   other work lands on the target).
 - Marks the story ready for review and points the team at the
   relevant titles and links.
+
+You write that description. You do not leave a stub.
 
 ### Post-review (after Approve, before acceptance)
 
@@ -106,11 +260,13 @@ An MR is ready for review only when it:
 - Team notified.
 - Merge-conflict reconciliation re-checked against this DoD.
 
+You do not merge unless the user asks. You do name the post-review
+steps if the grade is `READY`.
+
 ## Training-ready rules
 
-1. Read the linked story and its acceptance criteria before changing
-   code. State whether this MR **closes**, **supports**, or is
-   **independent** of the story.
+1. Read the linked story URL and its acceptance criteria before
+   changing code. No URL in the description is a `HOLD`.
 2. Keep one MR on one meaningful delivery slice. Move unrelated work
    to a separately linked story/branch before review. Do not fail an
    MR only because it is large. Fail it when it cannot prove its
@@ -134,7 +290,7 @@ An MR is ready for review only when it:
    credentials.
 8. Require the target branch to be current before approval. Use
    GitLab merge status. Do not invent a custom rebase shell job.
-9. The MR description tells a reviewer the story, what is
+9. The MR description tells a reviewer the story URL, what is
    intentionally excluded, and exactly how to verify it. Do not infer
    completion from the title.
 10. Never log, print, commit, or use a secret outside its approved
@@ -143,15 +299,18 @@ An MR is ready for review only when it:
 11. Add a new gate only when repeated review evidence shows it is
     broadly reusable. Keep story-specific checks inside that story's
     acceptance tests.
+12. Every new or changed first-party function, job, and target has a
+    quality five-part comment. Labels alone are not enough.
+13. You produce the description, the comments, the proofs, and the
+    report. A human does not fill those in after you.
 
-## Required MR description shape
+## Required MR description
 
-Use this template. Human/context checks. Do not replace it with a
-regex that pretends to understand the story.
+Write this. A heading without the URL is still a `HOLD`.
 
 ```markdown
 ## Work-item relationship
-- Story: <title and link>
+- Story: [title](https://example.invalid/work-item/ID)
 - This MR: closes / supports / does not close the story
 
 ## Scope boundary
@@ -168,15 +327,22 @@ regex that pretends to understand the story.
 - No unrelated generated output, local files, secrets, or dependency
   folders are tracked.
 - Documentation impact was reviewed: updated / not needed / deferred.
+- New or changed functions, jobs, and targets have quality five-part
+  comments.
 ```
 
+Replace `https://example.invalid/work-item/ID` with the real tracker
+URL.
+
 Empty description is a hold. A title-only description is a hold.
+A description with no work-item URL is a hold.
 “Pipeline is green” is not verification.
 
 ## Story-scoped gates
 
 Turn these on only when that story is in the slice. Do not make them
-generic repo gates.
+generic repo gates. If the slice claims the story, you produce the
+proof or you `HOLD`.
 
 | Story in scope | Required proof |
 | --- | --- |
@@ -203,31 +369,86 @@ push.
 
 ## How to grade a diff
 
-When the user asks “is this ready?”:
+When the user asks “is this ready?” or you are about to stop on a
+change you wrote:
 
-1. Read the linked story and acceptance criteria. If none are linked,
+1. Open the MR description. If there is no work-item `http(s)` URL,
+   fix it or return `HOLD`. Name that the story is not linked.
+2. Open that URL. Read acceptance criteria. State closes / supports /
+   independent. Map each AC to evidence. If you cannot open the URL,
    `HOLD`.
-2. State closes / supports / independent.
-3. List included vs explicitly deferred. If unrelated work is mixed
-   in, `HOLD` and ask for a split.
-4. Check the four proofs. Missing proof for the runtime level being
+3. Walk every new or changed first-party function, CI job, and Make
+   target. Inventory them. If any five-part comment is missing or
+   fails the quality bar, write it (author mode) or `HOLD` and list
+   the names (reviewer mode on someone else’s diff).
+4. List included vs explicitly deferred. If unrelated work is mixed
+   in, `HOLD` and give the split.
+5. Check the four proofs. Missing proof for the runtime level being
    claimed is `HOLD`.
-5. Walk Functionality, Quality, Documentation, Pre-review prep.
-6. Apply story-scoped gates only when that story is in the slice.
-7. Flag mechanical issues the bot will also catch: range pins,
-   secret-like added lines (type only), missing five-part comments
-   on new functions/jobs/targets, empty description, red required
-   jobs.
-8. End with exactly one of:
-
-   - `READY` — DoD met, four proofs visible, story-scoped proof
-     present if claimed, mechanical gates should pass.
-   - `HOLD` — bot or human must refuse Approve. Blockers first.
-   - `WARN` — Approve is allowed if jobs pass, but name the warnings
-     (huge diff with a stated boundary, docs deferred with a reason,
-     missing tests on a comment-only change, and so on).
+6. Walk Functionality, Quality, Documentation, Pre-review prep.
+7. Apply story-scoped gates only when that story is in the slice.
+8. Flag pins, secret-*like* added lines (type only), empty
+   description, missing work-item URL, weak five-part comments, red
+   required jobs.
+9. End with the report below. Exactly one grade.
 
 Never treat “CI is green” as `READY`.
+Never treat “looks good” as a report.
+
+## Required report
+
+Every review ends with this block. Do not skip rows. Do not replace
+it with a paragraph.
+
+```markdown
+GRADE: READY | HOLD | WARN
+
+STORY: <http(s) URL or MISSING>
+RELATIONSHIP: closes | supports | independent | UNSTATED
+AC MAP:
+- <criterion>: <evidence in diff or verification> | MISSING
+
+FUNCTIONS:
+- <name> (<path>:<line>): PASS | FAIL <reason>
+
+PROOFS:
+- story+scope+AC: PASS | FAIL
+- focused reproducible diff: PASS | FAIL
+- runtime-level proof: PASS | FAIL | N/A
+- current target, no mixed follow-on: PASS | FAIL
+
+DOD:
+- Functionality: PASS | FAIL
+- Quality: PASS | FAIL
+- Documentation: PASS | FAIL <updated|not needed|deferred>
+- Pre-review prep: PASS | FAIL
+
+BLOCKERS:
+- <one line each, or none>
+
+WARNINGS:
+- <one line each, or none>
+
+WHAT I CHANGED:
+- <description rewrite, comments written, tests added, or none>
+
+WHAT I STILL NEED:
+- <only facts a human must supply, or none>
+```
+
+`READY` — story URL present and opened, AC mapped, five-part quality
+holds on every inventoried name, DoD met, four proofs visible,
+story-scoped proof present if claimed.
+
+`HOLD` — refuse Approve. Blockers first. Missing story URL and
+missing/weak five-part comments are blockers. Unmapped AC is a
+blocker. Missing claimed runtime proof is a blocker.
+
+`WARN` — Approve is allowed if jobs pass, but name the warnings
+(huge diff with a stated boundary, docs deferred with a reason,
+missing tests on a comment-only change). Never use `WARN` for a
+missing story URL, a weak five-part comment, an unmapped AC, or a
+missing claimed runtime proof.
 
 ## Lessons that trained these rules
 
@@ -252,49 +473,36 @@ Use the pattern, not the internal URLs.
 - **MR 126** — GitLab connectivity preflight belongs in CI. Do not
   add token-bearing routes to the app. Never echo the token.
 
-## Mechanical approver (`gitlab-mr-reviewer`)
+## Later: mechanical approver
 
-This repository is the bot. Product repos include it. The bot must
-stay fail-closed and small. It does **not** replace the human checks
-above.
+This repository also ships `gitlab-mr-reviewer`. Product repos may
+include it later. It is pins, jobs, artifacts, and cheap scanners.
+It does **not** replace this file. Do not wait for it. Do not treat
+a bot Approve as `READY`. Do not implement bot work unless the user
+asks.
 
-It already blocks on:
-
-- required jobs missing or red (`require_blocking_jobs` defaults true)
-- inexact pins (`^` `~` ranges)
-- new function/job/target without What/Why/Who/Where/How
-- secret-like added lines (type only, no snippet)
-- empty MR description
-- JUnit failures / npm high-critical artifacts when present
-
-It does **not** decide story completeness. Codex does that with this
-file. The bot Approves only after mechanical gates pass.
-
-When editing **this** repo:
+When editing **this** repo only:
 
 - python3 + curl only. No new packages. No `requests` / `httpx`.
-- Token never on curl argv (`0600` header file). Refuse `CI_DEBUG_TRACE`.
-- HTTP 0 and non-2xx fail closed. Never fake Approve.
-- Same-project MRs only. Ignore job-level repo/ref overrides.
-- After helper changes, `make pin` so the include SHA is current.
-- `reviewer.json` comes from the protected target branch. A checkout
-  may add jobs or upgrade warn → blocker. It must not downgrade
-  `secret` / `pin-range`, empty `blocking_jobs`, or turn off
-  `require_blocking_jobs`.
+- Every new or changed function in `reviewer/` and `scripts/` needs a
+  quality five-part docstring. `make comments` / `make ci` enforce it.
 
 ```sh
 make ci
-make review          # laptop dry-run note, no API
+make review
 make pin
 make check_comments
 ```
 
 ## Copy this file
 
-- Keep this `AGENTS.md` in `gitlab-mr-reviewer` so Codex maintaining
-  the bot does not regress the contract.
+- Keep this `AGENTS.md` in `gitlab-mr-reviewer` so the contract does
+  not drift.
 - Copy it to the product repo root (Doxygen, Metrics, later Pipe
-  Dreams apps) so Codex reviews those diffs like a Pipe Dreams human.
+  Dreams apps) so the agent reviews those diffs like a Pipe Dreams
+  human and **finishes the MR**.
+- After this file changes, copy the new version again. A stale copy
+  will leave story links and five-part comments for a human.
 - Product-repo `reviewer.json` may name that repo's blocking jobs.
   Do not copy Metrics/Helm/ETL gates into a repo that does not have
   those stories yet.
