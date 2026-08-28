@@ -92,25 +92,71 @@ def _copy_defaults():
     return json.loads(json.dumps(DEFAULTS))
 
 
+def helper_checkout_root():
+    """
+    What: Filesystem root of this reviewer package (parent of reviewer/).
+    Why: An MR must not treat the include clone or this checkout as the product tree.
+    Who: is_bot_clone_root when it compares CI_PROJECT_DIR.
+    Where: The directory that contains reviewer/ and scripts/.
+    How: Resolve this file and take one parent above the reviewer package.
+    """
+    return Path(__file__).resolve().parents[1]
+
+
+def is_bot_clone_root(path):
+    """
+    What: True when a path is the include clone or this helper repository root.
+    Why: Job-level CI_PROJECT_DIR can point git show at the bot instead of the product.
+    Who: validate_mr_project_dir before it accepts a hosted root.
+    Where: .gitlab-mr-reviewer path segments and the helper checkout directory.
+    How: Resolve the path; match the clone directory name or this package root.
+    """
+    if path is None:
+        return True
+    try:
+        resolved = Path(path).resolve()
+    except (OSError, RuntimeError):
+        return True
+    if ".gitlab-mr-reviewer" in resolved.parts:
+        return True
+    return resolved == helper_checkout_root()
+
+
+def validate_mr_project_dir(env=None):
+    """
+    What: Return CI_PROJECT_DIR on an MR, or None plus a refuse reason.
+    Why: Missing or clone-root values retarget git show the same way hole H did.
+    Who: project_dir and run_review before they load trusted blobs.
+    Where: CI_PROJECT_DIR only; never REVIEW_PROJECT_DIR or the helper tree.
+    How: Require a non-empty path that is not .gitlab-mr-reviewer or this checkout.
+    """
+    data = os.environ if env is None else env
+    hosted = str(data.get("CI_PROJECT_DIR") or "").strip()
+    if not hosted:
+        return None, "CI_PROJECT_DIR is missing; refuse to guess the project root on an MR."
+    root = Path(hosted)
+    if is_bot_clone_root(root):
+        return None, "CI_PROJECT_DIR points at the reviewer clone; refuse to run git show there."
+    return root, None
+
+
 def project_dir(env=None):
     """
     What: Consumer checkout path the scanners should treat as the project root.
-    Why: An MR must not retarget git show into an empty decoy via REVIEW_PROJECT_DIR.
+    Why: An MR must not retarget git show into a decoy or the helper clone.
     Who: load_config, local diff, allowlist, and missing-test checks.
-    Where: CI_PROJECT_DIR on an MR; REVIEW_PROJECT_DIR only on a laptop run.
-    How: Ignore REVIEW_PROJECT_DIR when CI_MERGE_REQUEST_IID is set; else prefer it.
+    Where: Validated CI_PROJECT_DIR on an MR; REVIEW_PROJECT_DIR only on a laptop.
+    How: Ignore REVIEW_PROJECT_DIR when an MR IID is set; return None if the root is unusable.
     """
     data = os.environ if env is None else env
     mr = bool(str(data.get("CI_MERGE_REQUEST_IID") or "").strip())
     if mr:
-        hosted = str(data.get("CI_PROJECT_DIR") or "").strip()
-        if hosted:
-            return Path(hosted)
-        return Path(__file__).resolve().parents[1]
+        root, _reason = validate_mr_project_dir(data)
+        return root
     explicit = str(data.get("REVIEW_PROJECT_DIR") or data.get("CI_PROJECT_DIR") or "").strip()
     if explicit:
         return Path(explicit)
-    return Path(__file__).resolve().parents[1]
+    return helper_checkout_root()
 
 
 def parse_policy_text(text):
@@ -335,20 +381,24 @@ def load_config(env=None, root=None, show_fn=None):
     """
     data = os.environ if env is None else env
     cfg = _copy_defaults()
-    base = Path(root) if root is not None else project_dir(data)
-    mr = bool(str(data.get("CI_MERGE_REQUEST_IID") or "").strip())
-    trusted = read_trusted_policy(base, data, show_fn=show_fn)
-    if trusted is not None:
-        apply_trusted_policy(cfg, trusted)
-    chosen = str(data.get("REVIEW_CONFIG") or "").strip()
-    if mr:
-        tree_path = base / "reviewer.json"
-    elif chosen:
-        tree_path = Path(chosen)
+    if root is not None:
+        base = Path(root)
     else:
-        tree_path = base / "reviewer.json"
-    if tree_path.is_file():
-        apply_untrusted_policy(cfg, parse_policy_text(tree_path.read_text(encoding="utf-8")))
+        base = project_dir(data)
+    mr = bool(str(data.get("CI_MERGE_REQUEST_IID") or "").strip())
+    if base is not None:
+        trusted = read_trusted_policy(base, data, show_fn=show_fn)
+        if trusted is not None:
+            apply_trusted_policy(cfg, trusted)
+        chosen = str(data.get("REVIEW_CONFIG") or "").strip()
+        if mr:
+            tree_path = base / "reviewer.json"
+        elif chosen:
+            tree_path = Path(chosen)
+        else:
+            tree_path = base / "reviewer.json"
+        if tree_path.is_file():
+            apply_untrusted_policy(cfg, parse_policy_text(tree_path.read_text(encoding="utf-8")))
     blocking = str(data.get("REVIEW_BLOCKING_JOBS") or "").strip()
     if blocking:
         extra = [item.strip() for item in blocking.split(",") if item.strip()]

@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from reviewer.artifacts import consume_artifacts
-from reviewer.config import DISCLAIMER, load_config, project_dir
+from reviewer.config import DISCLAIMER, load_config, project_dir, validate_mr_project_dir
 from reviewer.diff import diff_refs_of, parse_changes, parse_diff
 from reviewer.findings import Finding, blockers_of
 from reviewer.http import (
@@ -245,7 +245,13 @@ def run_review(env=None, curl_fn=None, download_fn=None, local_diff_fn=None, sho
     token = str(data.get("GITLAB_REVIEWER_TOKEN") or "").strip()
     mr = is_mr_context(data)
     dry = is_dry_run(data)
-    root = project_dir(data)
+    if mr:
+        root, reason = validate_mr_project_dir(data)
+        if root is None:
+            print("Refusing: " + reason, file=sys.stderr)
+            return 1
+    else:
+        root = project_dir(data)
     cfg = load_config(data, root=root, show_fn=show_fn)
     if mr and not dry and not is_same_project_mr(data):
         print(
