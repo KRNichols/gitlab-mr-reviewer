@@ -136,8 +136,9 @@ from job-overridable `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`. A checkout copy
 may add jobs or upgrade a warn to blocker. It cannot downgrade `secret` /
 `pin-range` (or other blockers) to warn, empty `blocking_jobs`, turn off
 `require_blocking_jobs`, replace `job_aliases` (no dummy→blocker remap), or
-empty `pin_files` (union only). A trusted overlay is hardened the same way
-against DEFAULTS, so a poisoned target blob cannot fully weaken gates.
+empty `pin_files` (union only), or replace `path_rules` (union-add only). A
+trusted overlay is hardened the same way against DEFAULTS, so a poisoned
+target blob cannot fully weaken gates.
 
 Trusted (protected-ref) knobs:
 
@@ -157,8 +158,12 @@ Environment overrides (MR YAML cannot opt out of required jobs):
 - `REVIEW_REQUIRE_JOBS=1` (tighten only on an MR; `=0` is for laptop/unit tests)
 - `REVIEW_PROJECT_DIR` (include consumers already have `CI_PROJECT_DIR`)
 
-`approved-packages.json` is optional. When present, a newly added name that is
-not on the list is a blocker. When absent, only exact-pin shape is checked.
+`approved-packages.json` is loaded from the **same trusted ref** as
+`reviewer.json` (`git show` of `origin/<name>:approved-packages.json`). When
+that protected list is non-empty, a checkout that deletes or empties the file
+does **not** become allow-all: new names are still checked against the
+protected maps (HEAD may add names only). When no protected list exists, the
+file is optional and only exact-pin shape is checked.
 
 ## Local commands
 
@@ -196,6 +201,9 @@ python3 + curl only. No version ranges. No new packages.
 10. The include job clones a SHA shipped in the include file. That SHA must
     equal HEAD (or HEAD^ when HEAD only edits the include files). Job-level
     `GITLAB_REVIEWER_REPO` / `GITLAB_REVIEWER_REF` are not used.
+11. `approved-packages.json` comes from the default/target branch. An MR that
+    deletes or empties it cannot turn pin-allowlist into allow-all when the
+    protected list is non-empty. MR-tree `path_rules` are union-add only.
 
 ## What this is not
 

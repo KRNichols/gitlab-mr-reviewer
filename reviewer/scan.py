@@ -8,7 +8,7 @@ from pathlib import Path
 
 from reviewer.config import severity_for
 from reviewer.findings import Finding
-from reviewer.pins import is_exact_pin, load_allowlist, pep503
+from reviewer.pins import is_exact_pin, load_review_allowlist, pep503
 
 JSON_PIN_RE = re.compile(r"""["']([^"']+)["']\s*:\s*["']([^"']+)["']""")
 REQ_PIN_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*([<>=!~][^;#]+)?")
@@ -482,13 +482,13 @@ def scan_meta(files, description, cfg):
     return findings
 
 
-def scan_diff(files, allow=None, cfg=None, root=None):
+def scan_diff(files, allow=None, cfg=None, root=None, env=None, show_fn=None):
     """
     What: Turn a parsed (or raw) diff into findings without retaining snippets.
     Why: Pins, comments, and secret-like lines must hold; raw added text must not leak.
     Who: run_review on the local git diff or the GitLab changes payload.
     Where: Pin manifests, new functions, added lines, and optional path_rules.
-    How: Load the allowlist when omitted, then run each scanner on added rows.
+    How: Load the trusted allowlist when omitted, then run each scanner on added rows.
     """
     from reviewer.diff import parse_diff
 
@@ -496,8 +496,7 @@ def scan_diff(files, allow=None, cfg=None, root=None):
         files = parse_diff(files)
     cfg = cfg or {}
     if allow is None:
-        allow_path = Path(root or ".") / "approved-packages.json"
-        allow = load_allowlist(allow_path)
+        allow = load_review_allowlist(Path(root or "."), env=env, show_fn=show_fn)
     findings = []
     for item in files or []:
         path = str(item.get("path") or "")

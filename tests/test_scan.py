@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from reviewer.config import load_config
 from reviewer.diff import parse_diff
+from reviewer.pins import load_review_allowlist, merge_allowlists
 from reviewer.scan import classify_secret, scan_diff
 
 
@@ -37,6 +40,39 @@ class ScanTests(unittest.TestCase):
         diff = _hunk("backend/requirements.txt", "flask>=2.0.0", "django~=4.2")
         findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=self.cfg)
         self.assertGreaterEqual(sum(1 for item in findings if item.rule == "pin-range"), 1)
+
+    def test_empty_head_keep_protected_allowlist(self):
+        trusted = {"backend": {"flask": "==3.0.0"}, "frontend": {}}
+        merged = merge_allowlists(trusted, {"backend": {}, "frontend": {}})
+        self.assertEqual(merged["backend"]["flask"], "==3.0.0")
+        diff = _hunk("backend/requirements.txt", "requests==2.31.0")
+        findings = scan_diff(parse_diff(diff), allow=merged, cfg=self.cfg)
+        self.assertTrue(any(item.rule == "pin-allowlist" for item in findings))
+
+    def test_load_review_allowlist_ignores_emptied_checkout(self):
+        trusted_text = '{"backend": {"flask": "==3.0.0"}, "frontend": {}}'
+
+        def show_fn(spec):
+            if spec.endswith("approved-packages.json"):
+                return trusted_text
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "approved-packages.json").write_text(
+                '{"backend": {}, "frontend": {}}',
+                encoding="utf-8",
+            )
+            allow = load_review_allowlist(
+                root,
+                {"CI_DEFAULT_BRANCH": "main"},
+                show_fn=show_fn,
+            )
+        self.assertTrue(allow["backend"])
+        self.assertIn("flask", allow["backend"])
+        diff = _hunk("backend/requirements.txt", "evil==1.0.0")
+        findings = scan_diff(parse_diff(diff), allow=allow, cfg=self.cfg)
+        self.assertTrue(any(item.rule == "pin-allowlist" for item in findings))
 
     def test_exact_pin_is_not_a_range_finding(self):
         diff = _hunk("backend/requirements.txt", "flask==3.0.0")

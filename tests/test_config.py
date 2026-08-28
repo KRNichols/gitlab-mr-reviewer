@@ -180,6 +180,24 @@ class ConfigTests(unittest.TestCase):
             findings = scan_diff(parse_diff(diff), allow={"backend": {}, "frontend": {}}, cfg=cfg)
             self.assertTrue(any(item.rule == "pin-range" for item in findings))
 
+    def test_untrusted_cannot_replace_path_rules(self):
+        keep = {"path_glob": "secret/**", "pattern": "TODO", "message": "keep"}
+        cfg = {
+            "blocking_jobs": ["backend"],
+            "severities": {"secret": "blocker"},
+            "path_rules": [keep],
+            "pin_files": list(DEFAULTS["pin_files"]),
+            "job_aliases": dict(DEFAULTS["job_aliases"]),
+        }
+        apply_untrusted_policy(cfg, {"path_rules": []})
+        self.assertEqual(cfg["path_rules"], [keep])
+        apply_untrusted_policy(
+            cfg,
+            {"path_rules": [{"path_glob": "docs/**", "pattern": "FIXME", "message": "add"}]},
+        )
+        self.assertEqual(cfg["path_rules"][0], keep)
+        self.assertEqual(len(cfg["path_rules"]), 2)
+
     def test_untrusted_cannot_replace_pin_files_or_aliases(self):
         cfg = {
             "blocking_jobs": ["backend"],
