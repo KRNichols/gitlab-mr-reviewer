@@ -1,25 +1,21 @@
 # WHAT: GitLab CI/CD component inputs for the standalone reviewer job.
-# WHY: Catalog consumers should pin a ref and override the clone source.
+# WHY: Catalog consumers should pin the component ref, not a clone override.
 # WHO: A GitLab project that includes this file as a CI component.
 # WHERE: templates/review.yml in this repository when mirrored to GitLab.
-# HOW: Declare stage and clone knobs, then define the review job after the banner.
+# HOW: Declare the stage input only, then define the review job after the banner.
 
 spec:
   inputs:
     stage:
       default: .post
-    reviewer_repo:
-      default: "https://github.com/KRNichols/gitlab-mr-reviewer.git"
-    reviewer_ref:
-      default: main
 
 ---
 
-# WHAT: Component review job that clones this bot and Approves a green same-project MR.
-# WHY: Product pipelines need a required reviewer without vendoring Python files.
+# WHAT: Component review job that clones this bot at a shipped SHA.
+# WHY: Product pipelines need a required reviewer without a job-level repo override.
 # WHO: merge_request_event pipelines that include this component.
 # WHERE: The including project's .post stage unless inputs.stage is changed.
-# HOW: Install curl and git, refuse debug trace, clone the pinned ref, run the helper.
+# HOW: Install curl and git, refuse debug trace, fetch the pinned SHA, run the helper.
 review:
   stage: $[[ inputs.stage ]]
   image: python:3.12
@@ -33,6 +29,9 @@ review:
         echo "Refusing to run: CI_DEBUG_TRACE is on and would leak GITLAB_REVIEWER_TOKEN." >&2
         exit 1
       fi
-    - git clone --depth 1 --branch "$[[ inputs.reviewer_ref ]]" "$[[ inputs.reviewer_repo ]]" .gitlab-mr-reviewer
+    - git init .gitlab-mr-reviewer
+    - git -C .gitlab-mr-reviewer remote add origin https://github.com/KRNichols/gitlab-mr-reviewer.git
+    - git -C .gitlab-mr-reviewer fetch --depth 1 origin db45b6d4224d162f40059a639bc52cb82cf95bad
+    - git -C .gitlab-mr-reviewer checkout --detach FETCH_HEAD
   script:
     - python3 .gitlab-mr-reviewer/scripts/review_mr.py

@@ -1,12 +1,6 @@
 {
   "blocking_jobs": [
-    "backend",
-    "frontend",
-    "quality",
-    "build",
-    "security:node",
-    "test",
-    "lint"
+    "test"
   ],
   "non_blocking_jobs": [
     "security:pip",
@@ -20,7 +14,7 @@
     "security_pip": "security:pip",
     "pip-audit": "security:pip"
   },
-  "require_blocking_jobs": false,
+  "require_blocking_jobs": true,
   "pip_audit_blocks": false,
   "huge_diff_lines": 800,
   "coverage_min": 0,
