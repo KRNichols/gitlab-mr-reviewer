@@ -79,9 +79,10 @@ clone).
 
 **How consumers bump the pin:** take a newer `.gitlab-ci-include.yml` from this
 repo's default branch (or point the remote include at a newer commit of that
-file). The include always ships a 40-character SHA. Bump both
-`.gitlab-ci-include.yml` and `templates/review.yml` together when releasing
-this bot.
+file). The include always ships a 40-character SHA that equals **this** commit
+(`git rev-parse HEAD`), or the parent when HEAD is the include-only self-pin
+follow-up. `make include-pin` / `make ci` fail if the pin is stale. Bump both
+`.gitlab-ci-include.yml` and `templates/review.yml` together (`make pin`).
 
 GitLab CI/CD component (when this repo is mirrored to GitLab):
 
@@ -99,8 +100,9 @@ A full consumer sketch lives in `examples/consumer.gitlab-ci.yml`.
 - `test` — `make ci` (lint, comment gate, unittests)
 - `review` — `make review` on `merge_request_event` only, `when: always`
 
-`make review` locally is a dry-run. `make ci` is python3 only. No extra pip or
-npm packages.
+`make review` locally is a dry-run. `make ci` is python3 only (lint, comments,
+include-pin, tests). No extra pip or npm packages. `make pin` rewrites both
+include fetch lines to `HEAD` for a self-pin follow-up commit.
 
 ## What blocks Approve
 
@@ -128,11 +130,14 @@ not replace a secret scanner and it never reprints the matching text.
 
 ## Configure
 
-Optional `reviewer.json` is loaded from the **default / target ref**
-(`git show` of `CI_MERGE_REQUEST_TARGET_BRANCH_SHA` or `CI_DEFAULT_BRANCH`),
-not from the MR HEAD. A checkout copy may add jobs or upgrade a warn to
-blocker. It cannot downgrade `secret` / `pin-range` (or other blockers) to
-warn, and it cannot empty `blocking_jobs` or turn off `require_blocking_jobs`.
+Optional `reviewer.json` is loaded from the **default / target branch name**
+(`git show` of `origin/<name>:reviewer.json`), not from the MR HEAD and not
+from job-overridable `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`. A checkout copy
+may add jobs or upgrade a warn to blocker. It cannot downgrade `secret` /
+`pin-range` (or other blockers) to warn, empty `blocking_jobs`, turn off
+`require_blocking_jobs`, replace `job_aliases` (no dummy→blocker remap), or
+empty `pin_files` (union only). A trusted overlay is hardened the same way
+against DEFAULTS, so a poisoned target blob cannot fully weaken gates.
 
 Trusted (protected-ref) knobs:
 
@@ -181,11 +186,15 @@ python3 + curl only. No version ranges. No new packages.
    not leave a stale Approve.
 7. Secret-like added lines hold Approve. The note states pins/jobs only. pip-audit
    skip is not secrets-OK. CI stdout does not reprint raw matching snippets.
-8. `reviewer.json` comes from the default/target ref. An MR checkout cannot
-   downgrade secret/pin-range or empty `blocking_jobs`.
+8. `reviewer.json` comes from the default/target **branch name**. An MR
+   checkout cannot downgrade secret/pin-range, empty `blocking_jobs`, remap
+   `job_aliases`, or empty `pin_files`. Trusted overlays cannot fully weaken
+   DEFAULTS even if `CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is job-overridable.
 9. `require_blocking_jobs` defaults true. Missing backend/frontend/quality/build
-   /node-audit holds Approve. MR YAML cannot set `REVIEW_REQUIRE_JOBS=0`.
-10. The include job clones a SHA shipped in the include file. Job-level
+   /node-audit holds Approve. `manual` is not a pass. MR YAML cannot set
+   `REVIEW_REQUIRE_JOBS=0`.
+10. The include job clones a SHA shipped in the include file. That SHA must
+    equal HEAD (or HEAD^ when HEAD only edits the include files). Job-level
     `GITLAB_REVIEWER_REPO` / `GITLAB_REVIEWER_REF` are not used.
 
 ## What this is not

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from reviewer.config import DEFAULTS
 
-PASS_STATUSES = {"success", "passed", "ok", "manual"}
+PASS_STATUSES = {"success", "passed", "ok"}
 
 
 def normalize_job_name(raw, aliases):

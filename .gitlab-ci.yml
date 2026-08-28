@@ -24,7 +24,7 @@ stages:
 # WHY: lint, comments, and unittests must stay green before the bot Approves.
 # WHO: A GitLab runner after a default-branch push or merge request.
 # WHERE: python:3.12 image running make ci.
-# HOW: Install make, then run the same three targets a laptop runs.
+# HOW: Install make, then run the same four targets a laptop runs.
 test:
   stage: test
   image: python:3.12
