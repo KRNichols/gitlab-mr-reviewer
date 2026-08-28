@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,9 +15,11 @@ from reviewer.config import (
     apply_trusted_policy,
     apply_untrusted_policy,
     load_config,
+    project_dir,
     severity_for,
     trusted_ref_specs,
 )
+from reviewer.pins import load_review_allowlist
 from reviewer.jobs import PASS_STATUSES, evaluate_jobs
 from reviewer.scan import scan_diff
 from reviewer.diff import parse_diff
@@ -36,6 +39,76 @@ def _hunk(path, *added):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_mr_project_dir_ignores_review_override(self):
+        decoy = Path("/tmp/decoy-review-root")
+        hosted = Path("/tmp/hosted-ci-root")
+        chosen = project_dir(
+            {
+                "CI_MERGE_REQUEST_IID": "9",
+                "REVIEW_PROJECT_DIR": str(decoy),
+                "CI_PROJECT_DIR": str(hosted),
+            }
+        )
+        self.assertEqual(chosen, hosted)
+        fallback = project_dir(
+            {
+                "CI_MERGE_REQUEST_IID": "9",
+                "REVIEW_PROJECT_DIR": str(decoy),
+            }
+        )
+        self.assertNotEqual(fallback, decoy)
+
+    def test_laptop_project_dir_still_honors_review_override(self):
+        override = Path("/tmp/laptop-review-root")
+        chosen = project_dir({"REVIEW_PROJECT_DIR": str(override)})
+        self.assertEqual(chosen, override)
+
+    def test_mr_review_project_dir_cannot_retarget_trusted_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hosted = Path(tmp) / "hosted"
+            decoy = Path(tmp) / "decoy"
+            hosted.mkdir()
+            decoy.mkdir()
+            (hosted / "reviewer.json").write_text(json.dumps({"huge_diff_lines": 424}), encoding="utf-8")
+            (decoy / "reviewer.json").write_text(
+                json.dumps(
+                    {
+                        "huge_diff_lines": 1,
+                        "path_rules": [{"path_glob": "evil/**", "pattern": "x", "message": "decoy"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (hosted / "approved-packages.json").write_text(
+                json.dumps({"backend": {"flask": "==3.0.0"}}),
+                encoding="utf-8",
+            )
+            for repo in (hosted, decoy):
+                subprocess.run(["git", "init"], cwd=str(repo), check=True, capture_output=True)
+                subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@example.com"], check=True)
+                subprocess.run(["git", "-C", str(repo), "config", "user.name", "tester"], check=True)
+                subprocess.run(["git", "add", "-A"], cwd=str(repo), check=True, capture_output=True)
+                subprocess.run(
+                    ["git", "-c", "commit.gpgsign=false", "commit", "-m", "seed"],
+                    cwd=str(repo),
+                    check=True,
+                    capture_output=True,
+                )
+                subprocess.run(["git", "branch", "-M", "main"], cwd=str(repo), check=True, capture_output=True)
+            env = {
+                "CI_MERGE_REQUEST_IID": "9",
+                "CI_PROJECT_DIR": str(hosted),
+                "REVIEW_PROJECT_DIR": str(decoy),
+                "CI_DEFAULT_BRANCH": "main",
+            }
+            root = project_dir(env)
+            self.assertEqual(root, hosted)
+            cfg = load_config(env, root=root)
+            self.assertEqual(cfg["huge_diff_lines"], 424)
+            self.assertFalse(any(rule.get("message") == "decoy" for rule in cfg.get("path_rules") or []))
+            allow = load_review_allowlist(root, env)
+            self.assertIn("flask", allow["backend"])
+
     def test_defaults_require_blocking_jobs(self):
         self.assertTrue(DEFAULTS["require_blocking_jobs"])
         cfg = load_config({"REVIEW_CONFIG": "/nonexistent/reviewer.json"}, root="/tmp")

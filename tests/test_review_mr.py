@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -47,7 +48,7 @@ def _mr_env(token="tok", **extra):
         "CI_SERVER_URL": "https://gitlab.example.com",
         "CI_MERGE_REQUEST_DESCRIPTION": "Ready for review.",
         "REVIEW_CONFIG": "/nonexistent/reviewer.json",
-        "REVIEW_PROJECT_DIR": "/tmp",
+        "CI_PROJECT_DIR": "/tmp",
     }
     env.update(extra)
     if token:
@@ -113,6 +114,20 @@ class FakeAPI:
         if key in {"notes_write", "discussions_write", "approve", "unapprove"}:
             return 201, {}
         return 404, {}
+
+
+def _seed_git(root, branch="main"):
+    subprocess.run(["git", "init"], cwd=str(root), check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.name", "tester"], check=True)
+    subprocess.run(["git", "add", "-A"], cwd=str(root), check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "commit", "-m", "seed"],
+        cwd=str(root),
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "branch", "-M", branch], cwd=str(root), check=True, capture_output=True)
 
 
 def _refs():
@@ -404,7 +419,7 @@ class ReviewTests(unittest.TestCase):
             (root / "approved-packages.json").write_text("{}", encoding="utf-8")
             api = FakeAPI(changes=changes)
             env = _mr_env(
-                REVIEW_PROJECT_DIR=str(root),
+                CI_PROJECT_DIR=str(root),
                 CI_DEFAULT_BRANCH="main",
             )
             code = run_review(env, curl_fn=api, show_fn=show_fn)
@@ -441,10 +456,47 @@ class ReviewTests(unittest.TestCase):
             root = Path(tmp)
             api = FakeAPI(changes=changes)
             env = _mr_env(
-                REVIEW_PROJECT_DIR=str(root),
+                CI_PROJECT_DIR=str(root),
                 CI_DEFAULT_BRANCH="main",
             )
             code = run_review(env, curl_fn=api, show_fn=show_fn)
+        self.assertEqual(code, 1)
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("unapprove", _tails(api.calls))
+
+    def test_mr_review_project_dir_cannot_retarget_trusted_allowlist(self):
+        diff = (
+            "@@ -1,1 +1,2 @@\n"
+            " flask==3.0.0\n"
+            "+requests==2.31.0\n"
+        )
+        changes = {
+            "diff_refs": _refs(),
+            "changes": [
+                {
+                    "old_path": "requirements.txt",
+                    "new_path": "requirements.txt",
+                    "diff": diff,
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            hosted = Path(tmp) / "hosted"
+            decoy = Path(tmp) / "decoy"
+            hosted.mkdir()
+            decoy.mkdir()
+            (hosted / "approved-packages.json").write_text(
+                json.dumps({"backend": {"flask": "==3.0.0"}, "frontend": {}}),
+                encoding="utf-8",
+            )
+            _seed_git(hosted)
+            api = FakeAPI(changes=changes)
+            env = _mr_env(
+                CI_PROJECT_DIR=str(hosted),
+                REVIEW_PROJECT_DIR=str(decoy),
+                CI_DEFAULT_BRANCH="main",
+            )
+            code = run_review(env, curl_fn=api)
         self.assertEqual(code, 1)
         self.assertNotIn("approve", _tails(api.calls))
         self.assertIn("unapprove", _tails(api.calls))

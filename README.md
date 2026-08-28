@@ -156,7 +156,7 @@ Environment overrides (MR YAML cannot opt out of required jobs):
 - `REVIEW_BLOCKING_JOBS=extra-job` (union only; empty is ignored)
 - `REVIEW_PIP_AUDIT_BLOCKS=1` (tighten only)
 - `REVIEW_REQUIRE_JOBS=1` (tighten only on an MR; `=0` is for laptop/unit tests)
-- `REVIEW_PROJECT_DIR` (include consumers already have `CI_PROJECT_DIR`)
+- `REVIEW_PROJECT_DIR` (laptop only; ignored when `CI_MERGE_REQUEST_IID` is set)
 
 `approved-packages.json` is loaded from the **same trusted ref** as
 `reviewer.json` (`git show` of `origin/<name>:approved-packages.json`). When
@@ -204,6 +204,8 @@ python3 + curl only. No version ranges. No new packages.
 11. `approved-packages.json` comes from the default/target branch. An MR that
     deletes or empties it cannot turn pin-allowlist into allow-all when the
     protected list is non-empty. MR-tree `path_rules` are union-add only.
+12. On an MR, `REVIEW_PROJECT_DIR` cannot retarget `git show` of policy or
+    the allowlist. The project root is `CI_PROJECT_DIR` only.
 
 ## What this is not
 
