@@ -1,0 +1,51 @@
+{
+  "blocking_jobs": [
+    "backend",
+    "frontend",
+    "quality",
+    "build",
+    "security:node",
+    "test",
+    "lint"
+  ],
+  "non_blocking_jobs": [
+    "security:pip",
+    "pip-audit"
+  ],
+  "job_aliases": {
+    "security-node": "security:node",
+    "security_node": "security:node",
+    "node-audit": "security:node",
+    "security-pip": "security:pip",
+    "security_pip": "security:pip",
+    "pip-audit": "security:pip"
+  },
+  "require_blocking_jobs": false,
+  "pip_audit_blocks": false,
+  "huge_diff_lines": 800,
+  "coverage_min": 0,
+  "pin_files": [
+    "requirements.txt",
+    "requirements-dev.txt",
+    "backend/requirements.txt",
+    "backend/requirements-dev.txt",
+    "package.json",
+    "frontend/package.json",
+    "approved-packages.json"
+  ],
+  "path_rules": [],
+  "severities": {
+    "pin-range": "blocker",
+    "pin-allowlist": "blocker",
+    "five-part": "blocker",
+    "secret": "blocker",
+    "empty-description": "blocker",
+    "huge-diff": "warn",
+    "missing-test": "warn",
+    "junit": "blocker",
+    "npm-audit": "blocker",
+    "pip-audit": "warn",
+    "coverage": "warn",
+    "path-rule": "blocker"
+  }
+}

@@ -1,0 +1,32 @@
+# WHAT: Drop-in review job another GitLab project can include remotely.
+# WHY: Consumers should not copy the Python helper by hand.
+# WHO: A product pipeline that wants this bot as a required MR reviewer.
+# WHERE: include: remote of this file from the consumer .gitlab-ci.yml.
+# HOW: Clone this repo at GITLAB_REVIEWER_REF and run the helper against CI_PROJECT_DIR.
+
+# WHAT: Reviewer job that runs last and still unapproves on a red product gate.
+# WHY: .post is a built-in GitLab stage, so consumers need not declare review.
+# WHO: merge_request_event pipelines on the including project.
+# WHERE: Included into the consumer pipeline after their product jobs.
+# HOW: Clone the bot, refuse CI_DEBUG_TRACE, then exec scripts/review_mr.py.
+review:
+  stage: .post
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  variables:
+    GITLAB_REVIEWER_REPO:
+      value: "https://github.com/KRNichols/gitlab-mr-reviewer.git"
+    GITLAB_REVIEWER_REF:
+      value: "main"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl git
+    - |
+      if [ -n "${CI_DEBUG_TRACE:-}" ]; then
+        echo "Refusing to run: CI_DEBUG_TRACE is on and would leak GITLAB_REVIEWER_TOKEN." >&2
+        exit 1
+      fi
+    - git clone --depth 1 --branch "${GITLAB_REVIEWER_REF}" "${GITLAB_REVIEWER_REPO}" .gitlab-mr-reviewer
+  script:
+    - python3 .gitlab-mr-reviewer/scripts/review_mr.py
