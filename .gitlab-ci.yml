@@ -27,9 +27,9 @@ stages:
 # HOW: Install make, then run the same four targets a laptop runs.
 test:
   stage: test
-  image: python:3.12
+  image: python:3.12-alpine
   before_script:
-    - apt-get update -qq && apt-get install -y -qq make
+    - apk add --no-cache make
   script:
     - make ci
 
@@ -40,12 +40,12 @@ test:
 # HOW: python:3.12 plus curl. make review. when always so a red gate still unapproves.
 review:
   stage: review
-  image: python:3.12
+  image: python:3.12-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
   before_script:
-    - apt-get update -qq && apt-get install -y -qq curl make
+    - apk add --no-cache curl make git
   script:
     - |
       if [ -n "${CI_DEBUG_TRACE:-}" ]; then

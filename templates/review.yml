@@ -18,12 +18,12 @@ spec:
 # HOW: Install curl and git, refuse debug trace, fetch HEAD's shipped SHA, run the helper.
 review:
   stage: $[[ inputs.stage ]]
-  image: python:3.12
+  image: python:3.12-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
   before_script:
-    - apt-get update -qq && apt-get install -y -qq curl git
+    - apk add --no-cache curl git
     - |
       if [ -n "${CI_DEBUG_TRACE:-}" ]; then
         echo "Refusing to run: CI_DEBUG_TRACE is on and would leak GITLAB_REVIEWER_TOKEN." >&2
