@@ -464,6 +464,51 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("approve", _tails(api.calls))
         self.assertIn("unapprove", _tails(api.calls))
 
+    def test_mr_missing_ci_project_dir_cannot_approve(self):
+        env = _mr_env()
+        del env["CI_PROJECT_DIR"]
+        api = FakeAPI()
+        err = io.StringIO()
+        with redirect_stderr(err):
+            code = run_review(env, curl_fn=api)
+        self.assertEqual(code, 1)
+        self.assertEqual(api.calls, [])
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("CI_PROJECT_DIR", err.getvalue())
+
+    def test_mr_empty_ci_project_dir_cannot_approve(self):
+        api = FakeAPI()
+        err = io.StringIO()
+        with redirect_stderr(err):
+            code = run_review(_mr_env(CI_PROJECT_DIR=""), curl_fn=api)
+        self.assertEqual(code, 1)
+        self.assertEqual(api.calls, [])
+        self.assertNotIn("approve", _tails(api.calls))
+
+    def test_mr_clone_root_ci_project_dir_cannot_approve(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp) / ".gitlab-mr-reviewer"
+            clone.mkdir()
+            api = FakeAPI()
+            err = io.StringIO()
+            with redirect_stderr(err):
+                code = run_review(_mr_env(CI_PROJECT_DIR=str(clone)), curl_fn=api)
+        self.assertEqual(code, 1)
+        self.assertEqual(api.calls, [])
+        self.assertNotIn("approve", _tails(api.calls))
+        self.assertIn("clone", err.getvalue())
+
+    def test_mr_helper_checkout_ci_project_dir_cannot_approve(self):
+        from reviewer.config import helper_checkout_root
+
+        api = FakeAPI()
+        err = io.StringIO()
+        with redirect_stderr(err):
+            code = run_review(_mr_env(CI_PROJECT_DIR=str(helper_checkout_root())), curl_fn=api)
+        self.assertEqual(code, 1)
+        self.assertEqual(api.calls, [])
+        self.assertNotIn("approve", _tails(api.calls))
+
     def test_mr_review_project_dir_cannot_retarget_trusted_allowlist(self):
         diff = (
             "@@ -1,1 +1,2 @@\n"

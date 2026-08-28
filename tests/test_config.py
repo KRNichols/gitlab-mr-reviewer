@@ -14,10 +14,13 @@ from reviewer.config import (
     DEFAULTS,
     apply_trusted_policy,
     apply_untrusted_policy,
+    helper_checkout_root,
+    is_bot_clone_root,
     load_config,
     project_dir,
     severity_for,
     trusted_ref_specs,
+    validate_mr_project_dir,
 )
 from reviewer.pins import load_review_allowlist
 from reviewer.jobs import PASS_STATUSES, evaluate_jobs
@@ -56,7 +59,39 @@ class ConfigTests(unittest.TestCase):
                 "REVIEW_PROJECT_DIR": str(decoy),
             }
         )
-        self.assertNotEqual(fallback, decoy)
+        self.assertIsNone(fallback)
+
+    def test_mr_rejects_missing_or_clone_ci_project_dir(self):
+        missing_root, missing_reason = validate_mr_project_dir({"CI_MERGE_REQUEST_IID": "9"})
+        self.assertIsNone(missing_root)
+        self.assertIn("missing", missing_reason)
+        clone = Path("/tmp/consumer/.gitlab-mr-reviewer")
+        clone_root, clone_reason = validate_mr_project_dir(
+            {
+                "CI_MERGE_REQUEST_IID": "9",
+                "CI_PROJECT_DIR": str(clone),
+            }
+        )
+        self.assertIsNone(clone_root)
+        self.assertIn("clone", clone_reason)
+        self.assertTrue(is_bot_clone_root(clone))
+        self.assertTrue(is_bot_clone_root(helper_checkout_root()))
+        helper_root, helper_reason = validate_mr_project_dir(
+            {
+                "CI_MERGE_REQUEST_IID": "9",
+                "CI_PROJECT_DIR": str(helper_checkout_root()),
+            }
+        )
+        self.assertIsNone(helper_root)
+        self.assertIn("clone", helper_reason)
+        ok_root, ok_reason = validate_mr_project_dir(
+            {
+                "CI_MERGE_REQUEST_IID": "9",
+                "CI_PROJECT_DIR": "/tmp/hosted-ci-root",
+            }
+        )
+        self.assertEqual(ok_root, Path("/tmp/hosted-ci-root"))
+        self.assertIsNone(ok_reason)
 
     def test_laptop_project_dir_still_honors_review_override(self):
         override = Path("/tmp/laptop-review-root")

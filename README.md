@@ -158,6 +158,10 @@ Environment overrides (MR YAML cannot opt out of required jobs):
 - `REVIEW_REQUIRE_JOBS=1` (tighten only on an MR; `=0` is for laptop/unit tests)
 - `REVIEW_PROJECT_DIR` (laptop only; ignored when `CI_MERGE_REQUEST_IID` is set)
 
+On an MR, `CI_PROJECT_DIR` is required and must be the consumer checkout, not
+`.gitlab-mr-reviewer` and not this helper tree. A job-level empty or clone-root
+override fails closed.
+
 `approved-packages.json` is loaded from the **same trusted ref** as
 `reviewer.json` (`git show` of `origin/<name>:approved-packages.json`). When
 that protected list is non-empty, a checkout that deletes or empties the file
@@ -206,6 +210,9 @@ python3 + curl only. No version ranges. No new packages.
     protected list is non-empty. MR-tree `path_rules` are union-add only.
 12. On an MR, `REVIEW_PROJECT_DIR` cannot retarget `git show` of policy or
     the allowlist. The project root is `CI_PROJECT_DIR` only.
+13. On an MR, missing `CI_PROJECT_DIR` fails closed. A root that is the
+    include clone (`.gitlab-mr-reviewer`) or this helper checkout is refused
+    and cannot Approve.
 
 ## What this is not
 
