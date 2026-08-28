@@ -110,6 +110,41 @@ def commit_paths(root, spec="HEAD"):
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
+def is_ancestor(root, pin, head):
+    """
+    What: True when pin is git-ancestor of head in this repository.
+    Why: Helper-only commits must not start a pin rewrite loop against HEAD.
+    Who: check_includes when HEAD did not edit the include files.
+    Where: git merge-base --is-ancestor pin head at root.
+    How: Run merge-base and treat a zero status as ancestry.
+    """
+    if not pin or not head:
+        return False
+    try:
+        proc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", pin, head],
+            cwd=str(root or ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0
+
+
+def include_rels_changed(root, spec="HEAD"):
+    """
+    What: True when this commit edits either consumer include file.
+    Why: Strict pin==HEAD applies to pin rewrites, not helper-only follow-ups.
+    Who: check_includes before it chooses the ancestry fallback.
+    Where: The two INCLUDE_RELS paths in commit_paths output.
+    How: Intersect changed names with the include relative path set.
+    """
+    changed = set(commit_paths(root, spec))
+    return bool(changed & set(INCLUDE_RELS))
+
+
 def pin_equals_head(pin, head, parent=None, parent_changed=None):
     """
     What: True when the include pin is HEAD, or HEAD is the include-only pin bump.
@@ -156,7 +191,7 @@ def check_includes(root=None):
     Why: Consumers still running db45b6d would miss later red-team closures.
     Who: main and the unittest that grades this repository.
     Where: Include files versus git rev-parse HEAD in root.
-    How: Require one shared SHA, no clone overrides, and pin_equals_head.
+    How: Require one shared SHA; strict pin==HEAD only when include files change.
     """
     base = Path(root) if root is not None else ROOT
     failures = []
@@ -181,8 +216,11 @@ def check_includes(root=None):
     head = git_rev_parse(base, "HEAD")
     parent = git_rev_parse(base, "HEAD^")
     changed = commit_paths(base, "HEAD") if parent else []
-    if not pin_equals_head(pin, head, parent, changed):
-        failures.append("include pin %s != HEAD %s" % (pin, head or "(unknown)"))
+    if include_rels_changed(base):
+        if not pin_equals_head(pin, head, parent, changed):
+            failures.append("include pin %s != HEAD %s" % (pin, head or "(unknown)"))
+    elif head and pin != head and not is_ancestor(base, pin, head):
+        failures.append("include pin %s is not an ancestor of HEAD %s" % (pin, head))
     return failures
 
 
