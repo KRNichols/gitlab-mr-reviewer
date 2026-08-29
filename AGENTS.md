@@ -142,19 +142,30 @@ A review that only lists chores is a failed review.
 Every work item gets **one** merge request that **closes** it.
 Extra merge requests may `support`. They do not replace the closer.
 
-### Ask for the story URL first
+Start author mode with this exact menu. Do not skip it. Do not
+start coding first. Numbered choices beat essays.
 
-Before you create a branch, write code, or draft a description:
+```
+Before I touch git, pick one and paste the story URL if you have it.
 
-1. Ask once for the work-item URL.
-2. Open it. Read the acceptance criteria.
-3. Search the host for an existing branch or merge request that
-   already names that URL or that work-item id.
+1) I already have a branch AND a merge request
+2) I already have a branch, but no merge request yet
+3) I have not created a branch or a merge request yet
 
-No URL → ask once → `HOLD`. Do not invent a tracker link. Do not
-open a branch for an unknown story.
+Story URL:
+```
 
-### Path A — branch and merge request already exist
+Accept `1`, `2`, `3`, or the same words. If they answer in a
+sentence, map it to 1, 2, or 3 and confirm once.
+
+No story URL after that menu → ask once more → `HOLD`. Do not
+invent a tracker link.
+
+On Windows PowerShell a picker is allowed. It is not required.
+If the user runs one, treat the selected line as the answer to
+this menu.
+
+### 1 — Branch and merge request already exist
 
 Prove the triple before you add work:
 
@@ -162,49 +173,57 @@ Prove the triple before you add work:
 - Branch name
 - Merge-request URL
 
-Then ask, in plain language:
+Then ask:
 
-> This story already has branch `<name>` and merge request `<url>`.
+> You already have branch `<name>` and merge request `<url>`.
 > Which story should that merge request **close**?
 
-Do **not** open a second closer. Do **not** assume `supports` because
-the current description said “does not close.” If the user says this
-merge request is the closer, stay on that branch, set the description
-to `closes` plus the story URL, and hill-climb until the acceptance
-criteria and the Definition of Done are met.
+Stay on that branch. Do **not** open a second closer. If this is
+the closer, set the description to `closes` plus the story URL
+and hill-climb until acceptance criteria and the Definition of
+Done are met. If they say it is only support work, keep
+`supports` and do not claim the story is done.
 
-If the user says it is only support work, keep `supports` and do not
-claim the story is done.
+### 2 — Branch only, no merge request
 
-### Path B — virgin work item
+Stay on that branch. Never invent a second one.
 
-Only the work item exists. No branch. No merge request.
+1. Write the required description with the story URL and
+   `This change: closes the story`.
+2. Open the hosted merge request only after that text exists.
+   Asking you to implement the story authorizes opening the
+   closer. It does **not** authorize Approve, merge, or a
+   work-item status change.
+3. Hill-climb one change at a time until the Definition of Done
+   is met.
+
+### 3 — Virgin work item
+
+Nothing exists yet. No branch. No merge request.
 
 1. Create a local branch named from the story. Never commit to
    protected `main`.
 2. Write the required description with the story URL and
    `This change: closes the story`.
-3. Create the hosted merge request only after that description
-   exists. Asking you to implement the story authorizes opening the
-   closer. It does **not** authorize Approve, merge, or a work-item
-   status change.
-4. Hill-climb one change at a time until every acceptance criterion
-   is mapped or explicitly deferred and the Definition of Done is met.
+3. Open the hosted merge request only after that text exists.
+4. Hill-climb one change at a time until every acceptance
+   criterion is mapped or explicitly deferred and the Definition
+   of Done is met.
 5. Stop at `READY` or `WARN` with no hard holds. A human reviews.
    You do not Approve.
 
-### What “appropriately configured” means
+### What “configure everything” means
 
-The closer’s description always has:
+From whatever state they picked, finish the closer so it has:
 
 - A clickable story URL
-- `closes`
+- `closes` (unless they explicitly said this MR only supports)
 - Scope included / deferred
 - Exact verification commands
 - Runtime proof for the level the story claims
 
-A green pipeline is not configuration. A title that names the ticket
-is not configuration.
+A green pipeline is not configuration. A title that names the
+ticket is not configuration.
 
 ## Hard holds — do these first, every time
 
@@ -476,10 +495,10 @@ grade is `READY` so a human can finish them.
     fallback when an internal or private source is required.
 16. Climb this contract with the harness below. One change per loop.
     Never treat a green harness as Approve.
-17. Ask for the story URL before you open a branch. If a closer
-    already exists, stay on it and confirm which story it closes.
-    If the work item is virgin, open one branch and one MR that
-    closes it, then hill-climb until the Definition of Done is met.
+17. Start author mode with the 1 / 2 / 3 intake menu. Ask for the
+    story URL. Configure from the state they picked: existing
+    closer, branch-only, or virgin. Hill-climb until DoD. Never
+    open a second closer.
 
 ## Review habits
 
