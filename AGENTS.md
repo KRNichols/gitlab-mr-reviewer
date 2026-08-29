@@ -8,86 +8,90 @@ necessary. It is **not** proof the story is done. Never invent
 Approve. Never merge. Never print a secret. Never hand back a chore
 list you could have finished in the working tree.
 
-This file is the product contract. Copy **this file only** into
-Doxygen, Metrics, and later Pipe Dreams apps. Tool-repo commands
-(`make ci`, python3+curl-only, `scripts/comment_lib.py`) live in
-`AGENTS.tool.md` and must not travel with this file.
-
-Trained on two team sources (wiki text and the Metrics discovery
-record, originally read from screen capture):
-
-- Pipe Dreams wiki: **Story Definition of Done** (Mark-Anthony Hutton,
-  27 May 2025)
-- `Metrics-Gitlab-Discovery.md` (28 Aug 2026): 34 Metrics MRs, 239
-  peer-review notes, 142 inline comments. Training record, not a blame
-  record. Goal: stop the same review churn on AMC Doxygen and later
-  Pipe Dreams work.
+This file is a reusable review contract. Copy it to the root of any
+repository where an agent should finish author checks before a human
+reviews. Adapt tracker names, CI job names, and package sources to
+that repository. Do not copy helper-repo commands that do not exist
+there.
 
 If you follow this file, a human reviewer independently confirms the
-grade. If you ignore it, hold the MR.
+grade. If you ignore it, hold the change.
 
 Grade every change `READY`, `HOLD`, or `WARN`.
 
 `READY` means ready for **human review**. It never means approved,
 merged, or accepted.
 
-The GitLab bot is later. Ignore it unless the user asks for it.
+A mechanical reviewer bot is later work. Ignore it unless the user
+asks for it.
 
 ## Authority boundary
 
-Review is **read-only by default**. Do not edit GitLab descriptions,
+Review is **read-only by default**. Do not edit hosted descriptions,
 work-item status, branches, pipeline variables, approvals, or merge
 state unless the user explicitly authorizes that remote write.
 
-Remote writes, status changes, MR edits, pushes, and merges require
-explicit user authorization. A review request is not authorization.
+Remote writes, status changes, merge-request edits, pushes, and
+merges require explicit user authorization. A review request is not
+authorization.
 
 Author mode is only when the user asks you to implement, finish, fix,
 or write the change. Even then, finish the work in the working tree.
 Do not push, retitle, rewrite a hosted description, click Approve, or
 merge unless the user said to do that remote action.
 
-## GitLab evidence boundary
+Never direct-push or commit to protected `main` (or the repository's
+protected default branch). Use a branch and a merge request. That
+rule holds in author mode too.
 
-Read GitLab through `GITLAB_TOKEN`. Open story URLs, MR descriptions,
-diffs, pipelines, and job logs when those facts are required.
+## Evidence boundary
 
-`GITLAB_ROOT_API_TOKEN` is a **read-only fallback** only when normal
-access is blocked. Never use it to write, as npm or pip
+Read the project's hosting system with ordinary credentials
+(`GITLAB_TOKEN` on GitLab, the equivalent read token elsewhere).
+Open story URLs, descriptions, diffs, pipelines, and job logs when
+those facts are required.
+
+A root, owner, or break-glass token is a **read-only fallback** only
+when normal access is blocked. Never use it to write, as package
 authentication, or in logs.
 
-Do not refuse to open a story URL or a pipeline because this file was
-once trained from a screenshot. The screenshot rule was for training
-sources. Live review needs live evidence.
+Do not refuse to open a story URL or a pipeline because training
+material was once a screenshot. Live review needs live evidence.
 
-Never print a token, a `PRIVATE-TOKEN` header, or a raw secret match.
+Never print a token, an authorization header, or a raw secret match.
 
 ## Pipeline proof
 
 A green subset is a `HOLD`.
 
-For every CI change, and before `READY` on any MR:
+For every CI change, and before `READY` on any merge request:
 
 1. Lint the **merged** CI configuration (target plus source), not only
    the source-branch file.
 2. Inventory required jobs from that merged config and from product
-   docs / `reviewer.json` when they exist.
-3. Open the actual MR pipeline. Verify every required job **ran**, is
-   **blocking**, and was **not skipped**.
-4. `manual`, `allow_failure`, a filtered `rules` miss, a missing
-   include, or a renamed job is not a pass.
+   docs / policy files when they exist.
+3. Open the actual merge-request pipeline. Verify every **required**
+   job **ran**, is **blocking**, and was **not skipped**. Required
+   means the story, the merged CI rules, or project docs named it as
+   a gate for this slice.
+4. A required job that is `manual`, `allow_failure`, skipped by
+   `rules`, missing from an include, or renamed is a `HOLD`.
+5. An optional job is not a `HOLD`. Manual or `allow_failure` deploy
+   jobs must not block a CI-only change when that deploy is not in
+   the story or policy for this slice.
 
-A pipeline that is green because a required job never ran is
+A pipeline that is green because a **required** job never ran is
 incomplete. Do not treat that as Functionality or Pre-review prep.
 
 ## Package boundary
 
-Use only approved internal package mirrors. Never add a public
-registry fallback. Verify pip and npm's effective registry before
-installing dependencies.
+Install from the registry this repository already uses. If the
+project pins an internal, private, or approved mirror, do not add a
+public fallback. Verify the effective pip, npm, or language-equivalent
+registry before installing dependencies.
 
-Never use `GITLAB_ROOT_API_TOKEN` (or any root token) as npm or pip
-auth, a write token, or log output.
+Never use a root or break-glass token as package auth, a write token,
+or log output.
 
 ## Your job
 
@@ -96,7 +100,7 @@ Default mode is **read-only review**.
 Switch to author mode only when the user asks you to implement,
 finish, fix, or write the change. Reviewer mode stays in force when
 the user asks “is this ready?”, “review this”, or points at someone
-else’s MR.
+else’s change.
 
 In both modes you own the **grade**. In author mode you also own the
 local artifacts:
@@ -116,12 +120,12 @@ You do **not** own Approve, merge, or work-item status.
 ### Finish it, do not narrate it
 
 If you can fix the finding with facts you already have, fix it in the
-working tree. Do not apply a remote GitLab write unless authorized.
+working tree. Do not apply a remote write unless authorized.
 
 | Finding | What you do |
 | --- | --- |
-| Description missing the story URL and the user (or ticket) already gave one | Write the description template with that URL. Patch GitLab only if authorized. |
-| Description is title-only / “pipeline is green” | Rewrite the text to the template. Patch GitLab only if authorized. |
+| Description missing the story URL and the user (or ticket) already gave one | Write the description template with that URL. Patch the host only if authorized. |
+| Description is title-only / “pipeline is green” | Rewrite the text to the template. Patch the host only if authorized. |
 | New or changed function missing or gutting the five-part comment | Write the comment in the source. Do not ask the human to. |
 | Verification is missing and you know the commands | Write exact commands and expected results. |
 | Docs impact is unstated | Write `updated` / `not needed` / `deferred` plus one sentence. |
@@ -141,11 +145,11 @@ mode, fix the local ones before you stop.
 
 ### 1. The description must link the story
 
-`HOLD` unless the MR **description** (not the title) contains a real
-work-item URL.
+`HOLD` unless the merge-request **description** (not the title)
+contains a real work-item URL.
 
 A valid story link is an `http://` or `https://` URL that points at
-the work item (Azure Boards, Jira, GitLab issue, wiki story page).
+the work item (issue tracker, project board, or story page).
 A Markdown link counts: `[Story title](https://...)`.
 
 `HOLD` when any of these is true:
@@ -153,8 +157,8 @@ A Markdown link counts: `[Story title](https://...)`.
 - Description is empty or whitespace only.
 - Description is only the title repeated, or only a pipeline badge.
 - No `http://` / `https://` URL appears in the description.
-- The story is named only in the **title** (`Add login — ADO-1234`).
-- The story is named only as bare text (`ADO-1234`, `story 88`,
+- The story is named only in the **title** (`Add login — TICKET-1234`).
+- The story is named only as bare text (`TICKET-1234`, `story 88`,
   `see the wiki`, `same as last sprint`) with no URL.
 - The only URLs are unrelated (CI job, README, image host, shields.io)
   and no URL is presented as the work item.
@@ -163,10 +167,10 @@ Do not infer the story from the branch name, the commit list, or a
 green pipeline. If you cannot click a work-item URL in the
 description, the story is not linked.
 
-After you find the URL, state whether this MR **closes**, **supports**,
-or is **independent** of that story. If the description does not say
-which, write the text (author mode) or `HOLD` and ask (reviewer mode).
-Do not PUT the text on GitLab unless authorized.
+After you find the URL, state whether this change **closes**,
+**supports**, or is **independent** of that story. If the description
+does not say which, write the text (author mode) or `HOLD` and ask
+(reviewer mode). Do not PUT the text on the host unless authorized.
 
 Then open the URL. Read the acceptance criteria. Map each criterion
 to evidence in the diff or the verification steps. An unmapped
@@ -189,7 +193,8 @@ How:  <how it works, not a paste of the next source line>
 
 Python: the five parts live in the function docstring. YAML jobs and
 Make targets: the five parts live in the `#` block immediately above
-the name.
+the name. Other languages: use that language's normal doc comment
+on the unit.
 
 Content contract (apply by hand when a checker is silent):
 
@@ -213,25 +218,25 @@ How: return True
 What: Validates input
 Why: Validates input
 Who: run_review
-Where: reviewer/review.py
+Where: src/review.py
 How: if not token: return 1
 ```
 
 Pass example:
 
 ```
-What: Refuse a hosted review when CI_PROJECT_DIR is the helper clone.
-Why: A job-level override would retarget git show at this bot.
+What: Refuse a hosted review when the project root is the helper clone.
+Why: A job-level override would retarget git show at this helper.
 Who: run_review before it loads trusted policy.
-Where: reviewer/config.py on a merge_request_event.
-How: Resolve the path and compare it to the helper root and the
-     .gitlab-mr-reviewer segment; return None plus a reason.
+Where: config.py on a merge_request_event.
+How: Resolve the path and compare it to the helper root; return None
+     plus a reason.
 ```
 
 ### 3. Use this repository's comment checker
 
-Do not import another repo's script or an eight-character length rule
-as the product standard.
+Do not import another repository's script or a length rule as the
+standard.
 
 1. Find **this** repository's comment-quality command and its passing
    threshold (Makefile target, CI job, or documented script).
@@ -272,8 +277,9 @@ Do not infer these from a title or a green pipeline.
    follow-on work mixed into it.
 
 Missing proof for the runtime level being **claimed** is a `HOLD`.
-A Containerfile is not a container. `python app.py` is not Gunicorn
-when Gunicorn is the contract. Helm YAML is not a Service.
+A Containerfile is not a container. `python app.py` is not the
+production server when a process manager is the contract. A
+deployment manifest is not a running service.
 
 ## Story Definition of Done
 
@@ -283,7 +289,7 @@ let you Approve or merge.
 
 ### Functionality
 
-- All story acceptance criteria are met, or the MR states why a
+- All story acceptance criteria are met, or the change states why a
   criterion was not met.
 - Associated pipeline stages (build, scan, test, publish, and any
   story-owned stage) succeeded **and** the required jobs actually ran.
@@ -322,7 +328,7 @@ let you Approve or merge.
 
 ### Pre-review prep
 
-An MR is ready for human review only when it:
+A change is ready for human review only when it:
 
 - Has a description that
   - provides the story title **and a clickable story URL**
@@ -336,11 +342,11 @@ An MR is ready for human review only when it:
   links.
 
 You write that description text. You do not leave a stub. You do not
-push it to GitLab on a review-only request.
+push it to the host on a review-only request.
 
 ### Post-review (after a human Approves, before acceptance)
 
-- MR merged and closed.
+- Change merged and closed.
 - Source branch deleted.
 - Story marked ready for acceptance.
 - Team notified.
@@ -353,20 +359,19 @@ grade is `READY` so a human can finish them.
 
 1. Read the linked story URL and its acceptance criteria before
    changing code. No URL in the description is a `HOLD`.
-2. Keep one MR on one meaningful delivery slice. Move unrelated work
-   to a separately linked story/branch before review. Do not fail an
-   MR only because it is large. Fail it when it cannot prove its
-   boundary.
-3. Put executable source in reviewable first-party files (`.py`,
-   source, CI, charts). Do not commit notebooks, dependency folders,
-   generated build output, local logs, or secrets unless a documented
-   exception exists. Review must be possible from the diff.
+2. Keep one change on one meaningful delivery slice. Move unrelated
+   work to a separately linked story/branch before review. Do not
+   fail a change only because it is large. Fail it when it cannot
+   prove its boundary.
+3. Put executable source in reviewable first-party files. Do not
+   commit notebooks, dependency folders, generated build output,
+   local logs, or secrets unless a documented exception exists.
+   Review must be possible from the diff.
 4. Keep production dependencies separate from test/lint dependencies.
-   Test the same entrypoint production runs (Gunicorn/WSGI, not
-   `python app.py`, when that is the contract).
+   Test the same entrypoint production runs.
 5. A static contract is a preflight, not runtime proof. A Containerfile
-   is not a container. Build, scan/lint, run, then hit `/health`
-   before claiming container work is done.
+   is not a container. Build, scan/lint, run, then hit the health
+   endpoint before claiming container work is done.
 6. Put CI diagnostics in CI. Do not add production routes only to
    troubleshoot pipeline connectivity. Never print a token to prove
    the network works.
@@ -375,9 +380,10 @@ grade is `READY` so a human can finish them.
    Live smoke only when the story owns that environment and those
    credentials.
 8. Require the target branch to be current before calling the work
-   eligible for human approval. Use GitLab merge status. Do not invent
-   a custom rebase shell job.
-9. The MR description tells a reviewer the story URL, what is
+   eligible for human review. Use the host's merge status. Do not
+   invent a custom rebase shell job. Never commit or push to a
+   protected default branch. Use a branch and a merge request.
+9. The description tells a reviewer the story URL, what is
    intentionally excluded, and exactly how to verify it. Do not infer
    completion from the title.
 10. Never log, print, commit, or use a secret outside its approved
@@ -393,13 +399,15 @@ grade is `READY` so a human can finish them.
     the report. A human independently reviews and approves. A human
     does not fill those artifacts in after you.
 14. Lint merged CI and verify the live pipeline inventory before
-    `READY`. A green subset is a `HOLD`.
-15. Install only from approved internal mirrors. No public fallback.
+    `READY`. A green subset of **required** jobs is a `HOLD`.
+    Optional deploy jobs the story does not own are not.
+15. Install from the project's approved package source. No public
+    fallback when an internal or private source is required.
 
-## F18MS golden do and don't list
+## Review habits
 
-These are the repeated plain-language lessons from F18MS reviews.
-Use them to spot trouble before a human has to point it out.
+These are repeated plain-language lessons. Use them to spot trouble
+before a human has to point it out.
 
 ### Always do
 
@@ -410,7 +418,7 @@ Use them to spot trouble before a human has to point it out.
 - Keep source code in normal source files. Keep generated output,
   local logs, downloaded dependencies, notebooks, and scratch files
   out of the review unless they are explicitly part of the deliverable.
-- Use the approved internal package mirror. Lock dependencies when the
+- Use the project's approved package source. Lock dependencies when the
   language uses a lockfile. Verify the package source before installing.
 - Keep production dependencies separate from test, lint, and developer
   tools. Install only what each job actually needs.
@@ -418,9 +426,10 @@ Use them to spot trouble before a human has to point it out.
   blocking checks. Fix the finding instead of hiding it.
 - Check the actual pipeline job list. Required jobs must run, be
   blocking, and not be skipped.
-- Test the same runtime that will serve users. If production uses
-  Gunicorn, test Gunicorn. If production uses a container, run the
-  container. If production uses a deployment, verify the deployment.
+- Test the same runtime that will serve users. If production uses a
+  process manager, test that process manager. If production uses a
+  container, run the container. If production uses a deployment,
+  verify the deployment.
 - Keep external systems out of ordinary unit tests. Use fakes or mocks
   for normal success, missing setup, access denied, missing records,
   malformed replies, and network failures.
@@ -446,8 +455,8 @@ Use them to spot trouble before a human has to point it out.
 ### Never do
 
 - Never call a green subset of jobs a passing pipeline.
-- Never call a Containerfile a tested container, or Helm YAML a tested
-  deployment.
+- Never call a Containerfile a tested container, or a manifest a
+  tested deployment.
 - Never bypass a required check with `allow_failure`, a broad rule, a
   fake success message, or a skipped job.
 - Never print, commit, paste, or echo a token, password, secret, or
@@ -455,7 +464,7 @@ Use them to spot trouble before a human has to point it out.
 - Never use a root-level token as a package credential or a write token
   when it was supplied for read-only recovery.
 - Never pull dependencies from a public registry when the project has
-  an approved internal source.
+  an approved private or internal source.
 - Never hardcode a secret, account-specific value, resource path, or
   environment-specific name that belongs in approved configuration.
 - Never leave unused code, commented-out production logic, duplicate
@@ -468,12 +477,12 @@ Use them to spot trouble before a human has to point it out.
 - Never make a destroy, cleanup, rollback, truncate, or delete action
   broadly runnable by default.
 - Never assume a deployment exists because a manifest exists. Verify
-  the image, values, secrets, ConfigMaps, Service, Ingress, probes,
+  the image, values, secrets, configuration, service, ingress, probes,
   rollout, and reachable endpoint that the story claims.
 - Never leave a reviewer to guess the story, scope, test results, or
   reason for a non-obvious design choice.
-- Never approve, merge, push to protected `main`, or change work-item
-  status without explicit user authorization.
+- Never approve, merge, push to a protected default branch, or change
+  work-item status without explicit user authorization.
 
 ### What to look for before you say ready
 
@@ -491,15 +500,15 @@ Use them to spot trouble before a human has to point it out.
 - Is the branch behind its target, or did new work appear after review?
 - Does the claimed runtime proof match the runtime being delivered?
 
-## Required MR description
+## Required description
 
 Write this text. A heading without the URL is still a `HOLD`. Apply
-it to GitLab only when authorized.
+it to the host only when authorized.
 
 ```markdown
 ## Work-item relationship
 - Story: [title](https://example.invalid/work-item/ID)
-- This MR: closes / supports / does not close the story
+- This change: closes / supports / does not close the story
 
 ## Scope boundary
 - Included:
@@ -537,27 +546,27 @@ proof or you `HOLD`.
 
 | Story in scope | Required proof |
 | --- | --- |
-| Container build | Approved internal image build, `.dockerignore` that fits this repo, scan/lint evidence, startup smoke with test-safe config, `/health` against the running container. Registry push only when that criterion is authorized. |
-| Okta / S3 / GitLab / DB adapter | Mocked success, missing config, unauthorized, not-found, malformed response, network failure. No live credentials in the unit-test job. |
-| Helm / KaaS | Helm lint/render, every declared value consumed or explicitly reserved, probes, security context, Service **and** Ingress if a service is claimed, rollout/status, HTTPS smoke. Never infer a deployable service from a Deployment alone. |
-| ETL / ingestion | Story-specific idempotency, duplicate-key, transaction, and failure-path tests. Do not hang a generic ETL gate on a documentation portal. |
+| Container build | Approved image build, a dockerignore that fits this repo, scan/lint evidence, startup smoke with test-safe config, a health endpoint against the running container. Registry push only when that criterion is authorized. |
+| External adapter (identity, object store, API, database) | Mocked success, missing config, unauthorized, not-found, malformed response, network failure. No live credentials in the unit-test job. |
+| Kubernetes / Helm | Lint/render, every declared value consumed or explicitly reserved, probes, security context, Service **and** Ingress if a service is claimed, rollout/status, HTTPS smoke. Never infer a deployable service from a Deployment alone. |
+| ETL / ingestion | Story-specific idempotency, duplicate-key, transaction, and failure-path tests. Do not hang a generic ETL gate on unrelated work. |
 
-KaaS/Helm belongs with deployment stories, not with a CI-foundation
-MR. A green validation/quality/test/security pipeline is not an image
-build, not an image scan, not a container smoke, and not a registry
-push.
+Kubernetes and Helm belong with deployment stories, not with a
+CI-foundation change. A green validation/quality/test/security
+pipeline is not an image build, not an image scan, not a container
+smoke, and not a registry push.
 
 ## Do not add as generic gates
 
-- Do not fail an MR solely because it is large.
+- Do not fail a change solely because it is large.
 - Do not require a README edit for every code edit.
 - Do not add generic ETL idempotency checks to unrelated work.
-- Do not add Helm/KaaS checks before Helm/KaaS work exists.
+- Do not add Kubernetes or Helm checks before that work exists.
 - Do not make a token or external service call part of an ordinary
   unit-test gate.
-- Do not use `GITLAB_ROOT_API_TOKEN` (or any root token) as an npm
-  credential, a write token, or log output.
-- Do not copy tool-repo Make targets into a product repo that does
+- Do not use a root or break-glass token as a package credential, a
+  write token, or log output.
+- Do not copy another repository's Make targets into a repo that does
   not have them.
 
 ## How to grade a diff
@@ -566,12 +575,11 @@ When the user asks “is this ready?” or you are about to stop on a
 change you wrote:
 
 1. Stay read-only unless the user authorized a remote write.
-2. Open the MR description. If there is no work-item `http(s)` URL,
+2. Open the description. If there is no work-item `http(s)` URL,
    write the text or return `HOLD`. Name that the story is not linked.
-3. Open that URL through ordinary GitLab/tracker access (`GITLAB_TOKEN`
-   if GitLab). Read acceptance criteria. State closes / supports /
-   independent. Map each AC to evidence. If you cannot open the URL,
-   `HOLD`.
+3. Open that URL through ordinary tracker access. Read acceptance
+   criteria. State closes / supports / independent. Map each AC to
+   evidence. If you cannot open the URL, `HOLD`.
 4. Walk every new or changed first-party function, CI job, Make
    target, and named test function. Inventory them. Run this repo's
    comment checker. If any five-part comment is missing or fails the
@@ -581,9 +589,11 @@ change you wrote:
    in, `HOLD` and give the split.
 6. Check the four proofs. Missing proof for the runtime level being
    claimed is `HOLD`.
-7. Lint merged CI. Inventory required jobs. Confirm each ran, is
-   blocking, and was not skipped. A green subset is `HOLD`.
-8. Confirm installs use internal mirrors only.
+7. Lint merged CI. Inventory **required** jobs. Confirm each required
+   job ran, is blocking, and was not skipped. A green subset of
+   required jobs is `HOLD`. Optional or `allow_failure` deploy jobs
+   that the story does not own are not a `HOLD`.
+8. Confirm installs use the project's approved package source.
 9. Walk Functionality, Quality, Documentation, Pre-review prep.
 10. Apply story-scoped gates only when that story is in the slice.
 11. Flag pins, secret-*like* added lines (type only), empty
@@ -621,8 +631,8 @@ PIPELINE:
 - subset-green: yes | no
 
 PACKAGE:
-- effective pip/npm registry: <url or UNKNOWN>
-- public fallback present: yes | no
+- effective registry: <url or UNKNOWN>
+- public fallback present: yes | no | not applicable
 
 PROOFS:
 - story+scope+AC: PASS | FAIL
@@ -654,66 +664,57 @@ WHAT I STILL NEED:
 AC mapped, five-part quality holds on every inventoried name, repo
 comment checker passed or was honestly absent, DoD met, four proofs
 visible, story-scoped proof present if claimed, required jobs ran and
-were blocking, no public registry fallback. Do not Approve. Do not
-merge.
+were blocking, package source matches project policy. Do not Approve.
+Do not merge.
 
-`HOLD` — not eligible for human approval. Blockers first. Missing
+`HOLD` — not eligible for human review. Blockers first. Missing
 story URL, missing/weak five-part comments, comment-checker failure,
 unmapped AC, missing claimed runtime proof, and a green-but-incomplete
 pipeline are blockers.
 
-`WARN` — eligible for human approval if jobs pass, but name the
-warnings (huge diff with a stated boundary, docs deferred with a
+`WARN` — eligible for human review if required jobs pass, but name
+the warnings (huge diff with a stated boundary, docs deferred with a
 reason, missing tests on a comment-only change, repo has no comment
 checker). Do not Approve. Do not merge. Never use `WARN` for a
 missing story URL, a weak five-part comment, an unmapped AC, a
 missing claimed runtime proof, or a skipped required job.
 
-## Lessons that trained these rules
+## Patterns these rules come from
 
-Use the pattern, not the internal URLs.
+Use the pattern, not a project-specific ticket number.
 
-- **MR 110** — Reviewer could not inspect notebook/hidden source.
-  Health job had to move from `python app.py` to Gunicorn/WSGI.
-  Duplicate dependency installs were rejected. Lesson: reviewable
-  `.py` files, split runtime vs test deps, test the real entrypoint.
-- **MR 117** — Large ETL mixed with app/model/CI/README. Review asked
-  where the raw table was and how repeats behave. Lesson: prove the
-  story boundary; split unrelated behavior. Line count is not a gate.
-- **MR 119** — Containerfile + HEALTHCHECK was not enough. Review
-  still wanted `.dockerignore`, image lint/scan, and a running
-  `/health`. Lesson: static contract plus build → scan → run → smoke.
-- **MR 120** — KaaS YAML without Service/Ingress. Lesson: full
-  delivery contract, not a Deployment alone.
-- **MR 123** — Helm values, secrets, routes, and tests in one MR.
-  Review asked whether declared values were consumed and whether the
-  deployed instance actually changed. Lesson: least privilege, every
-  value used or reserved, reproducible verification.
-- **MR 126** — GitLab connectivity preflight belongs in CI. Do not
-  add token-bearing routes to the app. Never echo the token.
+- Hidden or generated source blocked review. Production must be tested
+  through the real entrypoint, with runtime dependencies kept separate
+  from test tooling.
+- A large change mixed unrelated work. Prove the story boundary and
+  split the rest. Line count is not a gate.
+- A Containerfile plus a health instruction was not enough. Review
+  still needed ignore rules, image lint/scan, and a running health
+  check. Static contract plus build → scan → run → smoke.
+- A workload manifest without a Service or Ingress is not a delivered
+  service.
+- Values, secrets, routes, and tests landed together. Every declared
+  value must be consumed or reserved, and verification must be
+  reproducible.
+- Host connectivity preflight belongs in CI. Do not add token-bearing
+  routes to the app. Never echo the token.
 
 ## Later: mechanical approver
 
-This source repository also ships `gitlab-mr-reviewer`. Product repos
-may include it later. It is pins, jobs, artifacts, and cheap scanners.
-It does **not** replace this file. Do not wait for it. Do not treat
-a bot Approve as `READY`. Do not implement bot work unless the user
-asks. Do not copy this repository's Make targets into a product repo.
-
-Tool-only rules for **this** repository live in `AGENTS.tool.md`.
+A repository may later add a mechanical reviewer. It is pins, jobs,
+artifacts, and cheap scanners. It does **not** replace this file.
+Do not wait for it. Do not treat a bot Approve as `READY`. Do not
+implement bot work unless the user asks.
 
 ## Copy this file
 
-- Keep this `AGENTS.md` in `gitlab-mr-reviewer` so the contract does
+- Keep a canonical copy where this contract is maintained so it does
   not drift.
-- Copy **only** this file to the product repo root (Doxygen, Metrics,
-  later Pipe Dreams apps) so the agent finishes author checks and a
-  human independently reviews.
-- Do **not** copy `AGENTS.tool.md`. Product repos must not inherit
-  commands that do not exist there.
+- Copy this file to the root of any product repository so the agent
+  finishes author checks and a human independently reviews.
 - After this file changes, copy the new version again. A stale copy
   will leave story links, five-part comments, pipeline inventory, and
-  package-mirror checks for a human.
-- Product-repo `reviewer.json` may name that repo's blocking jobs.
-  Do not copy Metrics/Helm/ETL gates into a repo that does not have
-  those stories yet.
+  package-source checks for a human.
+- A product repository may name its own blocking jobs in a local
+  policy file. Do not copy another project's story-specific gates
+  into a repo that does not have those stories yet.
