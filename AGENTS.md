@@ -8,8 +8,10 @@ necessary. It is **not** proof the story is done. Never invent
 Approve. Never merge. Never print a secret. Never hand back a chore
 list you could have finished in the working tree.
 
-This file is the product contract. Copy it into Doxygen, Metrics,
-and later Pipe Dreams apps.
+This file is the product contract. Copy **this file only** into
+Doxygen, Metrics, and later Pipe Dreams apps. Tool-repo commands
+(`make ci`, python3+curl-only, `scripts/comment_lib.py`) live in
+`AGENTS.tool.md` and must not travel with this file.
 
 Trained on two team sources (wiki text and the Metrics discovery
 record, originally read from screen capture):
@@ -45,9 +47,6 @@ or write the change. Even then, finish the work in the working tree.
 Do not push, retitle, rewrite a hosted description, click Approve, or
 merge unless the user said to do that remote action.
 
-Never direct-push or commit to protected `main`. Use a branch and an
-MR. That rule holds in author mode too.
-
 ## GitLab evidence boundary
 
 Read GitLab through `GITLAB_TOKEN`. Open story URLs, MR descriptions,
@@ -73,17 +72,12 @@ For every CI change, and before `READY` on any MR:
    the source-branch file.
 2. Inventory required jobs from that merged config and from product
    docs / `reviewer.json` when they exist.
-3. Open the actual MR pipeline. Verify every **required** job **ran**,
-   is **blocking**, and was **not skipped**. Required means the story,
-   the merged CI rules, product docs, or `reviewer.json` named it as
-   a gate for this slice.
-4. A required job that is `manual`, `allow_failure`, skipped by
-   `rules`, missing from the include, or renamed is a `HOLD`.
-5. An optional job is not a `HOLD`. Manual or `allow_failure` deploy
-   jobs must not block a CI-only MR when that deploy is not in the
-   story or policy for this slice.
+3. Open the actual MR pipeline. Verify every required job **ran**, is
+   **blocking**, and was **not skipped**.
+4. `manual`, `allow_failure`, a filtered `rules` miss, a missing
+   include, or a renamed job is not a pass.
 
-A pipeline that is green because a **required** job never ran is
+A pipeline that is green because a required job never ran is
 incomplete. Do not treat that as Functionality or Pre-review prep.
 
 ## Package boundary
@@ -381,9 +375,8 @@ grade is `READY` so a human can finish them.
    Live smoke only when the story owns that environment and those
    credentials.
 8. Require the target branch to be current before calling the work
-   eligible for human review. Use GitLab merge status. Do not invent
-   a custom rebase shell job. Never commit or push to protected
-   `main`. Use a branch and an MR.
+   eligible for human approval. Use GitLab merge status. Do not invent
+   a custom rebase shell job.
 9. The MR description tells a reviewer the story URL, what is
    intentionally excluded, and exactly how to verify it. Do not infer
    completion from the title.
@@ -400,9 +393,103 @@ grade is `READY` so a human can finish them.
     the report. A human independently reviews and approves. A human
     does not fill those artifacts in after you.
 14. Lint merged CI and verify the live pipeline inventory before
-    `READY`. A green subset of **required** jobs is a `HOLD`.
-    Optional deploy jobs the story does not own are not.
+    `READY`. A green subset is a `HOLD`.
 15. Install only from approved internal mirrors. No public fallback.
+
+## F18MS golden do and don't list
+
+These are the repeated plain-language lessons from F18MS reviews.
+Use them to spot trouble before a human has to point it out.
+
+### Always do
+
+- Link the real story, state what this change does, state what it does
+  not do, and give commands another developer can run.
+- Keep one change focused on one deliverable. Move unrelated work to a
+  separate branch and story.
+- Keep source code in normal source files. Keep generated output,
+  local logs, downloaded dependencies, notebooks, and scratch files
+  out of the review unless they are explicitly part of the deliverable.
+- Use the approved internal package mirror. Lock dependencies when the
+  language uses a lockfile. Verify the package source before installing.
+- Keep production dependencies separate from test, lint, and developer
+  tools. Install only what each job actually needs.
+- Run formatting, linting, tests, security scans, and secret scans as
+  blocking checks. Fix the finding instead of hiding it.
+- Check the actual pipeline job list. Required jobs must run, be
+  blocking, and not be skipped.
+- Test the same runtime that will serve users. If production uses
+  Gunicorn, test Gunicorn. If production uses a container, run the
+  container. If production uses a deployment, verify the deployment.
+- Keep external systems out of ordinary unit tests. Use fakes or mocks
+  for normal success, missing setup, access denied, missing records,
+  malformed replies, and network failures.
+- Give every configuration value one clear owner and one clear user.
+  Remove a value when nothing consumes it.
+- Use one canonical name for each resource, path, identifier, and
+  environment variable. Check exact spelling and case in every policy,
+  template, and consumer.
+- Make destructive work manual, narrowly scoped, and documented. Show
+  what it can delete or replace before it runs.
+- Wait for parallel work to finish or be accounted for before cleanup,
+  rollback, reset, or deletion.
+- Treat database, migration, and ingestion changes as repeatable work.
+  Run them twice and prove they preserve keys, data, transactions, and
+  expected failure behavior.
+- Keep the branch current with its target before asking for review.
+- Use final newlines, consistent indentation, and automatic formatting
+  so reviewers spend time on logic instead of cleanup.
+- Update documentation when a user-facing command, runtime contract,
+  configuration value, or deployment path changes. If no documentation
+  change is needed, say why.
+
+### Never do
+
+- Never call a green subset of jobs a passing pipeline.
+- Never call a Containerfile a tested container, or Helm YAML a tested
+  deployment.
+- Never bypass a required check with `allow_failure`, a broad rule, a
+  fake success message, or a skipped job.
+- Never print, commit, paste, or echo a token, password, secret, or
+  credential to diagnose a problem.
+- Never use a root-level token as a package credential or a write token
+  when it was supplied for read-only recovery.
+- Never pull dependencies from a public registry when the project has
+  an approved internal source.
+- Never hardcode a secret, account-specific value, resource path, or
+  environment-specific name that belongs in approved configuration.
+- Never leave unused code, commented-out production logic, duplicate
+  requests, duplicate resource definitions, or unexplained fallback
+  behavior in the change.
+- Never copy an old pipeline, chart, policy, or configuration value
+  without proving it is still used by this project.
+- Never add a production endpoint only to troubleshoot CI or a one-time
+  connectivity problem. Keep diagnostics in the relevant CI job.
+- Never make a destroy, cleanup, rollback, truncate, or delete action
+  broadly runnable by default.
+- Never assume a deployment exists because a manifest exists. Verify
+  the image, values, secrets, ConfigMaps, Service, Ingress, probes,
+  rollout, and reachable endpoint that the story claims.
+- Never leave a reviewer to guess the story, scope, test results, or
+  reason for a non-obvious design choice.
+- Never approve, merge, push to protected `main`, or change work-item
+  status without explicit user authorization.
+
+### What to look for before you say ready
+
+- Is the story real, openable, and mapped to evidence in this change?
+- Is any file present only because it helped local troubleshooting?
+- Does every new value have a consumer, and does every consumer receive
+  the value it expects?
+- Did a change add a second way to do the same thing?
+- Does a failure leave partial data, a blank table, a stale deployment,
+  or a half-finished cleanup behind?
+- Are there real tests for the unhappy path, not only a happy-path log?
+- Would another developer know exactly what command to run and what a
+  correct result looks like?
+- Are the required CI jobs visible in the actual merge-request pipeline?
+- Is the branch behind its target, or did new work appear after review?
+- Does the claimed runtime proof match the runtime being delivered?
 
 ## Required MR description
 
@@ -470,6 +557,8 @@ push.
   unit-test gate.
 - Do not use `GITLAB_ROOT_API_TOKEN` (or any root token) as an npm
   credential, a write token, or log output.
+- Do not copy tool-repo Make targets into a product repo that does
+  not have them.
 
 ## How to grade a diff
 
@@ -492,10 +581,8 @@ change you wrote:
    in, `HOLD` and give the split.
 6. Check the four proofs. Missing proof for the runtime level being
    claimed is `HOLD`.
-7. Lint merged CI. Inventory **required** jobs. Confirm each required
-   job ran, is blocking, and was not skipped. A green subset of
-   required jobs is `HOLD`. Optional or `allow_failure` deploy jobs
-   that the story does not own are not a `HOLD`.
+7. Lint merged CI. Inventory required jobs. Confirm each ran, is
+   blocking, and was not skipped. A green subset is `HOLD`.
 8. Confirm installs use internal mirrors only.
 9. Walk Functionality, Quality, Documentation, Pre-review prep.
 10. Apply story-scoped gates only when that story is in the slice.
@@ -570,13 +657,13 @@ visible, story-scoped proof present if claimed, required jobs ran and
 were blocking, no public registry fallback. Do not Approve. Do not
 merge.
 
-`HOLD` — not eligible for human review. Blockers first. Missing
+`HOLD` — not eligible for human approval. Blockers first. Missing
 story URL, missing/weak five-part comments, comment-checker failure,
 unmapped AC, missing claimed runtime proof, and a green-but-incomplete
 pipeline are blockers.
 
-`WARN` — eligible for human review if required jobs pass, but name
-the warnings (huge diff with a stated boundary, docs deferred with a
+`WARN` — eligible for human approval if jobs pass, but name the
+warnings (huge diff with a stated boundary, docs deferred with a
 reason, missing tests on a comment-only change, repo has no comment
 checker). Do not Approve. Do not merge. Never use `WARN` for a
 missing story URL, a weak five-part comment, an unmapped AC, a
@@ -586,25 +673,24 @@ missing claimed runtime proof, or a skipped required job.
 
 Use the pattern, not the internal URLs.
 
-- **Metrics MR 110** — Reviewer could not inspect notebook/hidden
-  source. Health job had to move from `python app.py` to Gunicorn/WSGI.
+- **MR 110** — Reviewer could not inspect notebook/hidden source.
+  Health job had to move from `python app.py` to Gunicorn/WSGI.
   Duplicate dependency installs were rejected. Lesson: reviewable
   `.py` files, split runtime vs test deps, test the real entrypoint.
-- **Metrics MR 117** — Large ETL mixed with app/model/CI/README.
-  Review asked where the raw table was and how repeats behave.
-  Lesson: prove the story boundary; split unrelated behavior. Line
-  count is not a gate.
-- **Metrics MR 119** — Containerfile + HEALTHCHECK was not enough.
-  Review still wanted `.dockerignore`, image lint/scan, and a running
+- **MR 117** — Large ETL mixed with app/model/CI/README. Review asked
+  where the raw table was and how repeats behave. Lesson: prove the
+  story boundary; split unrelated behavior. Line count is not a gate.
+- **MR 119** — Containerfile + HEALTHCHECK was not enough. Review
+  still wanted `.dockerignore`, image lint/scan, and a running
   `/health`. Lesson: static contract plus build → scan → run → smoke.
-- **Metrics MR 120** — KaaS YAML without Service/Ingress. Lesson: full
+- **MR 120** — KaaS YAML without Service/Ingress. Lesson: full
   delivery contract, not a Deployment alone.
-- **Metrics MR 123** — Helm values, secrets, routes, and tests in one
-  MR. Review asked whether declared values were consumed and whether
-  the deployed instance actually changed. Lesson: least privilege,
-  every value used or reserved, reproducible verification.
-- **Metrics MR 126** — GitLab connectivity preflight belongs in CI.
-  Do not add token-bearing routes to the app. Never echo the token.
+- **MR 123** — Helm values, secrets, routes, and tests in one MR.
+  Review asked whether declared values were consumed and whether the
+  deployed instance actually changed. Lesson: least privilege, every
+  value used or reserved, reproducible verification.
+- **MR 126** — GitLab connectivity preflight belongs in CI. Do not
+  add token-bearing routes to the app. Never echo the token.
 
 ## Later: mechanical approver
 
@@ -612,15 +698,19 @@ This source repository also ships `gitlab-mr-reviewer`. Product repos
 may include it later. It is pins, jobs, artifacts, and cheap scanners.
 It does **not** replace this file. Do not wait for it. Do not treat
 a bot Approve as `READY`. Do not implement bot work unless the user
-asks.
+asks. Do not copy this repository's Make targets into a product repo.
+
+Tool-only rules for **this** repository live in `AGENTS.tool.md`.
 
 ## Copy this file
 
 - Keep this `AGENTS.md` in `gitlab-mr-reviewer` so the contract does
   not drift.
-- Copy it to the product repo root (Doxygen, Metrics, later Pipe
-  Dreams apps) so the agent finishes author checks and a human
-  independently reviews.
+- Copy **only** this file to the product repo root (Doxygen, Metrics,
+  later Pipe Dreams apps) so the agent finishes author checks and a
+  human independently reviews.
+- Do **not** copy `AGENTS.tool.md`. Product repos must not inherit
+  commands that do not exist there.
 - After this file changes, copy the new version again. A stale copy
   will leave story links, five-part comments, pipeline inventory, and
   package-mirror checks for a human.
