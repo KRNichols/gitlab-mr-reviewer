@@ -1,13 +1,20 @@
 # AGENTS.md
 
-You do the work. A human stamps.
+The agent completes author checks. A human independently reviews
+and approves.
 
-You are the author and the reviewer. A green pipeline is necessary.
-It is **not** proof the story is done. Never invent Approve. Never
-print a secret. Never hand back a chore list you could have finished.
+You grade readiness and you finish local work. A green pipeline is
+necessary. It is **not** proof the story is done. Never invent
+Approve. Never merge. Never print a secret. Never hand back a chore
+list you could have finished in the working tree.
 
-This file is trained on two team sources (read from screen capture;
-do not call the internal GitLab host):
+This file is the product contract. Copy **this file only** into
+Doxygen, Metrics, and later Pipe Dreams apps. Tool-repo commands
+(`make ci`, python3+curl-only, `scripts/comment_lib.py`) live in
+`AGENTS.tool.md` and must not travel with this file.
+
+Trained on two team sources (wiki text and the Metrics discovery
+record, originally read from screen capture):
 
 - Pipe Dreams wiki: **Story Definition of Done** (Mark-Anthony Hutton,
   27 May 2025)
@@ -16,22 +23,85 @@ do not call the internal GitLab host):
   record. Goal: stop the same review churn on AMC Doxygen and later
   Pipe Dreams work.
 
-If you follow this file, a human reviewer should only confirm the
+If you follow this file, a human reviewer independently confirms the
 grade. If you ignore it, hold the MR.
 
 Grade every change `READY`, `HOLD`, or `WARN`.
 
+`READY` means ready for **human review**. It never means approved,
+merged, or accepted.
+
 The GitLab bot is later. Ignore it unless the user asks for it.
+
+## Authority boundary
+
+Review is **read-only by default**. Do not edit GitLab descriptions,
+work-item status, branches, pipeline variables, approvals, or merge
+state unless the user explicitly authorizes that remote write.
+
+Remote writes, status changes, MR edits, pushes, and merges require
+explicit user authorization. A review request is not authorization.
+
+Author mode is only when the user asks you to implement, finish, fix,
+or write the change. Even then, finish the work in the working tree.
+Do not push, retitle, rewrite a hosted description, click Approve, or
+merge unless the user said to do that remote action.
+
+## GitLab evidence boundary
+
+Read GitLab through `GITLAB_TOKEN`. Open story URLs, MR descriptions,
+diffs, pipelines, and job logs when those facts are required.
+
+`GITLAB_ROOT_API_TOKEN` is a **read-only fallback** only when normal
+access is blocked. Never use it to write, as npm or pip
+authentication, or in logs.
+
+Do not refuse to open a story URL or a pipeline because this file was
+once trained from a screenshot. The screenshot rule was for training
+sources. Live review needs live evidence.
+
+Never print a token, a `PRIVATE-TOKEN` header, or a raw secret match.
+
+## Pipeline proof
+
+A green subset is a `HOLD`.
+
+For every CI change, and before `READY` on any MR:
+
+1. Lint the **merged** CI configuration (target plus source), not only
+   the source-branch file.
+2. Inventory required jobs from that merged config and from product
+   docs / `reviewer.json` when they exist.
+3. Open the actual MR pipeline. Verify every required job **ran**, is
+   **blocking**, and was **not skipped**.
+4. `manual`, `allow_failure`, a filtered `rules` miss, a missing
+   include, or a renamed job is not a pass.
+
+A pipeline that is green because a required job never ran is
+incomplete. Do not treat that as Functionality or Pre-review prep.
+
+## Package boundary
+
+Use only approved internal package mirrors. Never add a public
+registry fallback. Verify pip and npm's effective registry before
+installing dependencies.
+
+Never use `GITLAB_ROOT_API_TOKEN` (or any root token) as npm or pip
+auth, a write token, or log output.
 
 ## Your job
 
-Default mode is **author**. You are writing or finishing the change.
-Reviewer mode is only when the user asks “is this ready?”, “review
-this”, or points at someone else’s MR.
+Default mode is **read-only review**.
 
-In both modes you own:
+Switch to author mode only when the user asks you to implement,
+finish, fix, or write the change. Reviewer mode stays in force when
+the user asks “is this ready?”, “review this”, or points at someone
+else’s MR.
 
-1. The story URL in the **description**, not the title.
+In both modes you own the **grade**. In author mode you also own the
+local artifacts:
+
+1. The story URL in the **description text**, not the title.
 2. A quality What/Why/Who/Where/How comment on every new or changed
    first-party function, CI job, and Make target.
 3. The four proofs.
@@ -41,28 +111,33 @@ In both modes you own:
 You do **not** own elegance as a substitute for those five. Pretty
 code with no story URL is a `HOLD`.
 
+You do **not** own Approve, merge, or work-item status.
+
 ### Finish it, do not narrate it
 
-If you can fix the finding with facts you already have, fix it.
+If you can fix the finding with facts you already have, fix it in the
+working tree. Do not apply a remote GitLab write unless authorized.
 
 | Finding | What you do |
 | --- | --- |
-| Description missing the story URL and the user (or ticket) already gave one | Write the description template with that URL. |
-| Description is title-only / “pipeline is green” | Rewrite it to the template. |
-| New or changed function missing or gutting the five-part comment | Write the comment. Do not ask the human to. |
+| Description missing the story URL and the user (or ticket) already gave one | Write the description template with that URL. Patch GitLab only if authorized. |
+| Description is title-only / “pipeline is green” | Rewrite the text to the template. Patch GitLab only if authorized. |
+| New or changed function missing or gutting the five-part comment | Write the comment in the source. Do not ask the human to. |
 | Verification is missing and you know the commands | Write exact commands and expected results. |
 | Docs impact is unstated | Write `updated` / `not needed` / `deferred` plus one sentence. |
 | Mixed unrelated work | Split it, or `HOLD` with the exact split. Do not “warn” and ship. |
 | Story URL is unknown | Ask once. Then `HOLD`. Do not invent a tracker link. |
 | Acceptance criteria are behind a URL you cannot open | Say so. `HOLD`. Do not guess the story. |
+| Comment checker exists and fails | Run it, fix the findings, re-run it. |
+| Required CI jobs missing or skipped | `HOLD`. Name the jobs. Do not invent a green pipeline. |
 
 A review that only lists chores is a failed review.
 
 ## Hard holds — do these first, every time
 
-These two checks are not optional and are not warnings. If either
-fails, the grade is `HOLD`. Do not keep reading for a way to pass.
-In author mode, fix them before you stop.
+These checks are not optional and are not warnings. If any fails, the
+grade is `HOLD`. Do not keep reading for a way to pass. In author
+mode, fix the local ones before you stop.
 
 ### 1. The description must link the story
 
@@ -90,7 +165,8 @@ description, the story is not linked.
 
 After you find the URL, state whether this MR **closes**, **supports**,
 or is **independent** of that story. If the description does not say
-which, write it (author mode) or `HOLD` and ask (reviewer mode).
+which, write the text (author mode) or `HOLD` and ask (reviewer mode).
+Do not PUT the text on GitLab unless authorized.
 
 Then open the URL. Read the acceptance criteria. Map each criterion
 to evidence in the diff or the verification steps. An unmapped
@@ -115,11 +191,9 @@ Python: the five parts live in the function docstring. YAML jobs and
 Make targets: the five parts live in the `#` block immediately above
 the name.
 
-Quality bar (same rules as `scripts/comment_lib.py` when that file
-exists; apply them by hand everywhere else):
+Content contract (apply by hand when a checker is silent):
 
 - All five labels present, each with a non-empty value.
-- Each value is at least 8 characters after the label.
 - No `TODO`, `TBD`, `FIXME`, `XXX`, `placeholder`, `self-explanatory`,
   or `n/a` in any part.
 - `What` and `Why` are not the same sentence.
@@ -154,29 +228,37 @@ How: Resolve the path and compare it to the helper root and the
      .gitlab-mr-reviewer segment; return None plus a reason.
 ```
 
-Scope:
+### 3. Use this repository's comment checker
 
-- Count every added or edited `def` / `async def`, JS `function` /
-  arrow assigned to a name, GitLab job key, and Make target in
-  first-party files.
-- Nested helpers count. Dunder methods count.
-- Files under `tests/` are exempt unless the product repo says
-  otherwise.
-- A comment that only exists eight lines away, or only in a commit
-  message, does not count.
-- If a function body changed and the five-part comment was removed or
-  gutted, that is a `HOLD` even if the function is not brand new.
+Do not import another repo's script or an eight-character length rule
+as the product standard.
+
+1. Find **this** repository's comment-quality command and its passing
+   threshold (Makefile target, CI job, or documented script).
+2. Run it against the changed tree.
+3. `HOLD` if it fails, is skipped, or cannot be run when the repo
+   documents one.
+4. Named test functions are in scope unless **that checker** exempts
+   them. This file does not exempt `tests/`.
+5. If the repo has no checker, still require the five-part content
+   contract by hand. Name the missing checker as a warning, not as a
+   free pass on missing comments.
+
+A comment that only exists eight lines away, or only in a commit
+message, does not count. If a function body changed and the five-part
+comment was removed or gutted, that is a `HOLD` even if the function
+is not brand new.
 
 How to inventory (do this, do not skim):
 
 1. List every changed first-party path in the diff.
 2. For each path, list every added or edited function / job / target
-   by name and line.
+   by name and line. Include named test functions.
 3. For each name, quote the five-part block or write `MISSING`.
-4. Score each block against the quality bar. One failing part fails
-   the name.
-5. Put the inventory in the report. A review with no inventory is
-   incomplete.
+4. Score each block against the content contract **and** the repo
+   checker. One failing part fails the name.
+5. Put the inventory and the checker command in the report. A review
+   with no inventory is incomplete.
 
 ## Four proofs — visible before you say done
 
@@ -196,14 +278,15 @@ when Gunicorn is the contract. Helm YAML is not a Service.
 ## Story Definition of Done
 
 Developers meet this before handing work to review. You meet it
-before you stop. Reviewers review against it.
+before you stop. Reviewers review against it. Meeting it does not
+let you Approve or merge.
 
 ### Functionality
 
 - All story acceptance criteria are met, or the MR states why a
   criterion was not met.
 - Associated pipeline stages (build, scan, test, publish, and any
-  story-owned stage) succeeded.
+  story-owned stage) succeeded **and** the required jobs actually ran.
 - Code and scripts are functional and idempotent: they run the first
   time and every time after.
 - Previous capabilities still work.
@@ -215,7 +298,8 @@ before you stop. Reviewers review against it.
 - Multiple sequential tasks are scripted, not documented as a
   click-path.
 - New work follows existing conventions (names, locations, layout).
-- Existing lint and static analysis stay green.
+- Existing lint, static analysis, and the repo comment checker stay
+  green.
 - Every new or changed first-party function, job, and target has a
   quality What/Why/Who/Where/How comment (see Hard holds).
 - DevOps principles:
@@ -238,7 +322,7 @@ before you stop. Reviewers review against it.
 
 ### Pre-review prep
 
-An MR is ready for review only when it:
+An MR is ready for human review only when it:
 
 - Has a description that
   - provides the story title **and a clickable story URL**
@@ -247,12 +331,14 @@ An MR is ready for review only when it:
   - gives exact steps to test the work against acceptance criteria
 - Targets the correct branch, with that target merged in (always;
   other work lands on the target).
-- Marks the story ready for review and points the team at the
-  relevant titles and links.
+- Marks the story ready for review only when the user authorized that
+  work-item write, and points the team at the relevant titles and
+  links.
 
-You write that description. You do not leave a stub.
+You write that description text. You do not leave a stub. You do not
+push it to GitLab on a review-only request.
 
-### Post-review (after Approve, before acceptance)
+### Post-review (after a human Approves, before acceptance)
 
 - MR merged and closed.
 - Source branch deleted.
@@ -260,8 +346,8 @@ You write that description. You do not leave a stub.
 - Team notified.
 - Merge-conflict reconciliation re-checked against this DoD.
 
-You do not merge unless the user asks. You do name the post-review
-steps if the grade is `READY`.
+You do not Approve. You do not merge. You name these steps when the
+grade is `READY` so a human can finish them.
 
 ## Training-ready rules
 
@@ -288,8 +374,9 @@ steps if the grade is `READY`.
    unauthorized, not-found, malformed response, network failure).
    Live smoke only when the story owns that environment and those
    credentials.
-8. Require the target branch to be current before approval. Use
-   GitLab merge status. Do not invent a custom rebase shell job.
+8. Require the target branch to be current before calling the work
+   eligible for human approval. Use GitLab merge status. Do not invent
+   a custom rebase shell job.
 9. The MR description tells a reviewer the story URL, what is
    intentionally excluded, and exactly how to verify it. Do not infer
    completion from the title.
@@ -300,13 +387,19 @@ steps if the grade is `READY`.
     broadly reusable. Keep story-specific checks inside that story's
     acceptance tests.
 12. Every new or changed first-party function, job, and target has a
-    quality five-part comment. Labels alone are not enough.
-13. You produce the description, the comments, the proofs, and the
-    report. A human does not fill those in after you.
+    quality five-part comment. Labels alone are not enough. Run the
+    repository's comment checker.
+13. You produce the description text, the comments, the proofs, and
+    the report. A human independently reviews and approves. A human
+    does not fill those artifacts in after you.
+14. Lint merged CI and verify the live pipeline inventory before
+    `READY`. A green subset is a `HOLD`.
+15. Install only from approved internal mirrors. No public fallback.
 
 ## Required MR description
 
-Write this. A heading without the URL is still a `HOLD`.
+Write this text. A heading without the URL is still a `HOLD`. Apply
+it to GitLab only when authorized.
 
 ```markdown
 ## Work-item relationship
@@ -329,6 +422,9 @@ Write this. A heading without the URL is still a `HOLD`.
 - Documentation impact was reviewed: updated / not needed / deferred.
 - New or changed functions, jobs, and targets have quality five-part
   comments.
+- Repo comment checker: <command> <pass|fail|missing>
+- Merged CI lint: pass | fail
+- Required jobs ran, blocking, not skipped: <list>
 ```
 
 Replace `https://example.invalid/work-item/ID` with the real tracker
@@ -366,34 +462,43 @@ push.
   unit-test gate.
 - Do not use `GITLAB_ROOT_API_TOKEN` (or any root token) as an npm
   credential, a write token, or log output.
+- Do not copy tool-repo Make targets into a product repo that does
+  not have them.
 
 ## How to grade a diff
 
 When the user asks “is this ready?” or you are about to stop on a
 change you wrote:
 
-1. Open the MR description. If there is no work-item `http(s)` URL,
-   fix it or return `HOLD`. Name that the story is not linked.
-2. Open that URL. Read acceptance criteria. State closes / supports /
+1. Stay read-only unless the user authorized a remote write.
+2. Open the MR description. If there is no work-item `http(s)` URL,
+   write the text or return `HOLD`. Name that the story is not linked.
+3. Open that URL through ordinary GitLab/tracker access (`GITLAB_TOKEN`
+   if GitLab). Read acceptance criteria. State closes / supports /
    independent. Map each AC to evidence. If you cannot open the URL,
    `HOLD`.
-3. Walk every new or changed first-party function, CI job, and Make
-   target. Inventory them. If any five-part comment is missing or
-   fails the quality bar, write it (author mode) or `HOLD` and list
-   the names (reviewer mode on someone else’s diff).
-4. List included vs explicitly deferred. If unrelated work is mixed
+4. Walk every new or changed first-party function, CI job, Make
+   target, and named test function. Inventory them. Run this repo's
+   comment checker. If any five-part comment is missing or fails the
+   content contract or the checker, write it (author mode) or `HOLD`
+   and list the names (reviewer mode on someone else’s diff).
+5. List included vs explicitly deferred. If unrelated work is mixed
    in, `HOLD` and give the split.
-5. Check the four proofs. Missing proof for the runtime level being
+6. Check the four proofs. Missing proof for the runtime level being
    claimed is `HOLD`.
-6. Walk Functionality, Quality, Documentation, Pre-review prep.
-7. Apply story-scoped gates only when that story is in the slice.
-8. Flag pins, secret-*like* added lines (type only), empty
-   description, missing work-item URL, weak five-part comments, red
-   required jobs.
-9. End with the report below. Exactly one grade.
+7. Lint merged CI. Inventory required jobs. Confirm each ran, is
+   blocking, and was not skipped. A green subset is `HOLD`.
+8. Confirm installs use internal mirrors only.
+9. Walk Functionality, Quality, Documentation, Pre-review prep.
+10. Apply story-scoped gates only when that story is in the slice.
+11. Flag pins, secret-*like* added lines (type only), empty
+    description, missing work-item URL, weak five-part comments, red
+    or missing required jobs.
+12. End with the report below. Exactly one grade.
 
 Never treat “CI is green” as `READY`.
 Never treat “looks good” as a report.
+Never treat `READY` as Approve.
 
 ## Required report
 
@@ -410,6 +515,19 @@ AC MAP:
 
 FUNCTIONS:
 - <name> (<path>:<line>): PASS | FAIL <reason>
+
+COMMENT CHECKER:
+- command: <cmd or MISSING>
+- result: PASS | FAIL | NOT RUN <reason>
+
+PIPELINE:
+- merged CI lint: PASS | FAIL | NOT RUN
+- required jobs: <name: ran+blocking | skipped | missing>
+- subset-green: yes | no
+
+PACKAGE:
+- effective pip/npm registry: <url or UNKNOWN>
+- public fallback present: yes | no
 
 PROOFS:
 - story+scope+AC: PASS | FAIL
@@ -430,25 +548,31 @@ WARNINGS:
 - <one line each, or none>
 
 WHAT I CHANGED:
-- <description rewrite, comments written, tests added, or none>
+- <local description text, comments written, tests added, or none>
+- remote writes authorized / performed: <none | list>
 
 WHAT I STILL NEED:
 - <only facts a human must supply, or none>
 ```
 
-`READY` — story URL present and opened, AC mapped, five-part quality
-holds on every inventoried name, DoD met, four proofs visible,
-story-scoped proof present if claimed.
+`READY` — eligible for **human review**. Story URL present and opened,
+AC mapped, five-part quality holds on every inventoried name, repo
+comment checker passed or was honestly absent, DoD met, four proofs
+visible, story-scoped proof present if claimed, required jobs ran and
+were blocking, no public registry fallback. Do not Approve. Do not
+merge.
 
-`HOLD` — refuse Approve. Blockers first. Missing story URL and
-missing/weak five-part comments are blockers. Unmapped AC is a
-blocker. Missing claimed runtime proof is a blocker.
+`HOLD` — not eligible for human approval. Blockers first. Missing
+story URL, missing/weak five-part comments, comment-checker failure,
+unmapped AC, missing claimed runtime proof, and a green-but-incomplete
+pipeline are blockers.
 
-`WARN` — Approve is allowed if jobs pass, but name the warnings
-(huge diff with a stated boundary, docs deferred with a reason,
-missing tests on a comment-only change). Never use `WARN` for a
-missing story URL, a weak five-part comment, an unmapped AC, or a
-missing claimed runtime proof.
+`WARN` — eligible for human approval if jobs pass, but name the
+warnings (huge diff with a stated boundary, docs deferred with a
+reason, missing tests on a comment-only change, repo has no comment
+checker). Do not Approve. Do not merge. Never use `WARN` for a
+missing story URL, a weak five-part comment, an unmapped AC, a
+missing claimed runtime proof, or a skipped required job.
 
 ## Lessons that trained these rules
 
@@ -475,34 +599,26 @@ Use the pattern, not the internal URLs.
 
 ## Later: mechanical approver
 
-This repository also ships `gitlab-mr-reviewer`. Product repos may
-include it later. It is pins, jobs, artifacts, and cheap scanners.
+This source repository also ships `gitlab-mr-reviewer`. Product repos
+may include it later. It is pins, jobs, artifacts, and cheap scanners.
 It does **not** replace this file. Do not wait for it. Do not treat
 a bot Approve as `READY`. Do not implement bot work unless the user
-asks.
+asks. Do not copy this repository's Make targets into a product repo.
 
-When editing **this** repo only:
-
-- python3 + curl only. No new packages. No `requests` / `httpx`.
-- Every new or changed function in `reviewer/` and `scripts/` needs a
-  quality five-part docstring. `make comments` / `make ci` enforce it.
-
-```sh
-make ci
-make review
-make pin
-make check_comments
-```
+Tool-only rules for **this** repository live in `AGENTS.tool.md`.
 
 ## Copy this file
 
 - Keep this `AGENTS.md` in `gitlab-mr-reviewer` so the contract does
   not drift.
-- Copy it to the product repo root (Doxygen, Metrics, later Pipe
-  Dreams apps) so the agent reviews those diffs like a Pipe Dreams
-  human and **finishes the MR**.
+- Copy **only** this file to the product repo root (Doxygen, Metrics,
+  later Pipe Dreams apps) so the agent finishes author checks and a
+  human independently reviews.
+- Do **not** copy `AGENTS.tool.md`. Product repos must not inherit
+  commands that do not exist there.
 - After this file changes, copy the new version again. A stale copy
-  will leave story links and five-part comments for a human.
+  will leave story links, five-part comments, pipeline inventory, and
+  package-mirror checks for a human.
 - Product-repo `reviewer.json` may name that repo's blocking jobs.
   Do not copy Metrics/Helm/ETL gates into a repo that does not have
   those stories yet.
