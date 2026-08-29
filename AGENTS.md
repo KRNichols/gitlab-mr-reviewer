@@ -8,10 +8,8 @@ necessary. It is **not** proof the story is done. Never invent
 Approve. Never merge. Never print a secret. Never hand back a chore
 list you could have finished in the working tree.
 
-This file is the product contract. Copy **this file only** into
-Doxygen, Metrics, and later Pipe Dreams apps. Tool-repo commands
-(`make ci`, python3+curl-only, `scripts/comment_lib.py`) live in
-`AGENTS.tool.md` and must not travel with this file.
+This file is the product contract. Copy it into Doxygen, Metrics,
+and later Pipe Dreams apps.
 
 Trained on two team sources (wiki text and the Metrics discovery
 record, originally read from screen capture):
@@ -47,6 +45,9 @@ or write the change. Even then, finish the work in the working tree.
 Do not push, retitle, rewrite a hosted description, click Approve, or
 merge unless the user said to do that remote action.
 
+Never direct-push or commit to protected `main`. Use a branch and an
+MR. That rule holds in author mode too.
+
 ## GitLab evidence boundary
 
 Read GitLab through `GITLAB_TOKEN`. Open story URLs, MR descriptions,
@@ -72,12 +73,17 @@ For every CI change, and before `READY` on any MR:
    the source-branch file.
 2. Inventory required jobs from that merged config and from product
    docs / `reviewer.json` when they exist.
-3. Open the actual MR pipeline. Verify every required job **ran**, is
-   **blocking**, and was **not skipped**.
-4. `manual`, `allow_failure`, a filtered `rules` miss, a missing
-   include, or a renamed job is not a pass.
+3. Open the actual MR pipeline. Verify every **required** job **ran**,
+   is **blocking**, and was **not skipped**. Required means the story,
+   the merged CI rules, product docs, or `reviewer.json` named it as
+   a gate for this slice.
+4. A required job that is `manual`, `allow_failure`, skipped by
+   `rules`, missing from the include, or renamed is a `HOLD`.
+5. An optional job is not a `HOLD`. Manual or `allow_failure` deploy
+   jobs must not block a CI-only MR when that deploy is not in the
+   story or policy for this slice.
 
-A pipeline that is green because a required job never ran is
+A pipeline that is green because a **required** job never ran is
 incomplete. Do not treat that as Functionality or Pre-review prep.
 
 ## Package boundary
@@ -375,8 +381,9 @@ grade is `READY` so a human can finish them.
    Live smoke only when the story owns that environment and those
    credentials.
 8. Require the target branch to be current before calling the work
-   eligible for human approval. Use GitLab merge status. Do not invent
-   a custom rebase shell job.
+   eligible for human review. Use GitLab merge status. Do not invent
+   a custom rebase shell job. Never commit or push to protected
+   `main`. Use a branch and an MR.
 9. The MR description tells a reviewer the story URL, what is
    intentionally excluded, and exactly how to verify it. Do not infer
    completion from the title.
@@ -393,7 +400,8 @@ grade is `READY` so a human can finish them.
     the report. A human independently reviews and approves. A human
     does not fill those artifacts in after you.
 14. Lint merged CI and verify the live pipeline inventory before
-    `READY`. A green subset is a `HOLD`.
+    `READY`. A green subset of **required** jobs is a `HOLD`.
+    Optional deploy jobs the story does not own are not.
 15. Install only from approved internal mirrors. No public fallback.
 
 ## Required MR description
@@ -462,8 +470,6 @@ push.
   unit-test gate.
 - Do not use `GITLAB_ROOT_API_TOKEN` (or any root token) as an npm
   credential, a write token, or log output.
-- Do not copy tool-repo Make targets into a product repo that does
-  not have them.
 
 ## How to grade a diff
 
@@ -486,8 +492,10 @@ change you wrote:
    in, `HOLD` and give the split.
 6. Check the four proofs. Missing proof for the runtime level being
    claimed is `HOLD`.
-7. Lint merged CI. Inventory required jobs. Confirm each ran, is
-   blocking, and was not skipped. A green subset is `HOLD`.
+7. Lint merged CI. Inventory **required** jobs. Confirm each required
+   job ran, is blocking, and was not skipped. A green subset of
+   required jobs is `HOLD`. Optional or `allow_failure` deploy jobs
+   that the story does not own are not a `HOLD`.
 8. Confirm installs use internal mirrors only.
 9. Walk Functionality, Quality, Documentation, Pre-review prep.
 10. Apply story-scoped gates only when that story is in the slice.
@@ -562,13 +570,13 @@ visible, story-scoped proof present if claimed, required jobs ran and
 were blocking, no public registry fallback. Do not Approve. Do not
 merge.
 
-`HOLD` — not eligible for human approval. Blockers first. Missing
+`HOLD` — not eligible for human review. Blockers first. Missing
 story URL, missing/weak five-part comments, comment-checker failure,
 unmapped AC, missing claimed runtime proof, and a green-but-incomplete
 pipeline are blockers.
 
-`WARN` — eligible for human approval if jobs pass, but name the
-warnings (huge diff with a stated boundary, docs deferred with a
+`WARN` — eligible for human review if required jobs pass, but name
+the warnings (huge diff with a stated boundary, docs deferred with a
 reason, missing tests on a comment-only change, repo has no comment
 checker). Do not Approve. Do not merge. Never use `WARN` for a
 missing story URL, a weak five-part comment, an unmapped AC, a
@@ -578,24 +586,25 @@ missing claimed runtime proof, or a skipped required job.
 
 Use the pattern, not the internal URLs.
 
-- **MR 110** — Reviewer could not inspect notebook/hidden source.
-  Health job had to move from `python app.py` to Gunicorn/WSGI.
+- **Metrics MR 110** — Reviewer could not inspect notebook/hidden
+  source. Health job had to move from `python app.py` to Gunicorn/WSGI.
   Duplicate dependency installs were rejected. Lesson: reviewable
   `.py` files, split runtime vs test deps, test the real entrypoint.
-- **MR 117** — Large ETL mixed with app/model/CI/README. Review asked
-  where the raw table was and how repeats behave. Lesson: prove the
-  story boundary; split unrelated behavior. Line count is not a gate.
-- **MR 119** — Containerfile + HEALTHCHECK was not enough. Review
-  still wanted `.dockerignore`, image lint/scan, and a running
+- **Metrics MR 117** — Large ETL mixed with app/model/CI/README.
+  Review asked where the raw table was and how repeats behave.
+  Lesson: prove the story boundary; split unrelated behavior. Line
+  count is not a gate.
+- **Metrics MR 119** — Containerfile + HEALTHCHECK was not enough.
+  Review still wanted `.dockerignore`, image lint/scan, and a running
   `/health`. Lesson: static contract plus build → scan → run → smoke.
-- **MR 120** — KaaS YAML without Service/Ingress. Lesson: full
+- **Metrics MR 120** — KaaS YAML without Service/Ingress. Lesson: full
   delivery contract, not a Deployment alone.
-- **MR 123** — Helm values, secrets, routes, and tests in one MR.
-  Review asked whether declared values were consumed and whether the
-  deployed instance actually changed. Lesson: least privilege, every
-  value used or reserved, reproducible verification.
-- **MR 126** — GitLab connectivity preflight belongs in CI. Do not
-  add token-bearing routes to the app. Never echo the token.
+- **Metrics MR 123** — Helm values, secrets, routes, and tests in one
+  MR. Review asked whether declared values were consumed and whether
+  the deployed instance actually changed. Lesson: least privilege,
+  every value used or reserved, reproducible verification.
+- **Metrics MR 126** — GitLab connectivity preflight belongs in CI.
+  Do not add token-bearing routes to the app. Never echo the token.
 
 ## Later: mechanical approver
 
@@ -603,19 +612,15 @@ This source repository also ships `gitlab-mr-reviewer`. Product repos
 may include it later. It is pins, jobs, artifacts, and cheap scanners.
 It does **not** replace this file. Do not wait for it. Do not treat
 a bot Approve as `READY`. Do not implement bot work unless the user
-asks. Do not copy this repository's Make targets into a product repo.
-
-Tool-only rules for **this** repository live in `AGENTS.tool.md`.
+asks.
 
 ## Copy this file
 
 - Keep this `AGENTS.md` in `gitlab-mr-reviewer` so the contract does
   not drift.
-- Copy **only** this file to the product repo root (Doxygen, Metrics,
-  later Pipe Dreams apps) so the agent finishes author checks and a
-  human independently reviews.
-- Do **not** copy `AGENTS.tool.md`. Product repos must not inherit
-  commands that do not exist there.
+- Copy it to the product repo root (Doxygen, Metrics, later Pipe
+  Dreams apps) so the agent finishes author checks and a human
+  independently reviews.
 - After this file changes, copy the new version again. A stale copy
   will leave story links, five-part comments, pipeline inventory, and
   package-mirror checks for a human.
