@@ -137,6 +137,75 @@ working tree. Do not apply a remote write unless authorized.
 
 A review that only lists chores is a failed review.
 
+## Author intake
+
+Every work item gets **one** merge request that **closes** it.
+Extra merge requests may `support`. They do not replace the closer.
+
+### Ask for the story URL first
+
+Before you create a branch, write code, or draft a description:
+
+1. Ask once for the work-item URL.
+2. Open it. Read the acceptance criteria.
+3. Search the host for an existing branch or merge request that
+   already names that URL or that work-item id.
+
+No URL → ask once → `HOLD`. Do not invent a tracker link. Do not
+open a branch for an unknown story.
+
+### Path A — branch and merge request already exist
+
+Prove the triple before you add work:
+
+- Story URL
+- Branch name
+- Merge-request URL
+
+Then ask, in plain language:
+
+> This story already has branch `<name>` and merge request `<url>`.
+> Which story should that merge request **close**?
+
+Do **not** open a second closer. Do **not** assume `supports` because
+the current description said “does not close.” If the user says this
+merge request is the closer, stay on that branch, set the description
+to `closes` plus the story URL, and hill-climb until the acceptance
+criteria and the Definition of Done are met.
+
+If the user says it is only support work, keep `supports` and do not
+claim the story is done.
+
+### Path B — virgin work item
+
+Only the work item exists. No branch. No merge request.
+
+1. Create a local branch named from the story. Never commit to
+   protected `main`.
+2. Write the required description with the story URL and
+   `This change: closes the story`.
+3. Create the hosted merge request only after that description
+   exists. Asking you to implement the story authorizes opening the
+   closer. It does **not** authorize Approve, merge, or a work-item
+   status change.
+4. Hill-climb one change at a time until every acceptance criterion
+   is mapped or explicitly deferred and the Definition of Done is met.
+5. Stop at `READY` or `WARN` with no hard holds. A human reviews.
+   You do not Approve.
+
+### What “appropriately configured” means
+
+The closer’s description always has:
+
+- A clickable story URL
+- `closes`
+- Scope included / deferred
+- Exact verification commands
+- Runtime proof for the level the story claims
+
+A green pipeline is not configuration. A title that names the ticket
+is not configuration.
+
 ## Hard holds — do these first, every time
 
 These checks are not optional and are not warnings. If any fails, the
@@ -168,9 +237,11 @@ green pipeline. If you cannot click a work-item URL in the
 description, the story is not linked.
 
 After you find the URL, state whether this change **closes**,
-**supports**, or is **independent** of that story. If the description
-does not say which, write the text (author mode) or `HOLD` and ask
-(reviewer mode). Do not PUT the text on the host unless authorized.
+**supports**, or is **independent** of that story. The work item's
+closer must say `closes`. An extra merge request may say `supports`.
+If the description does not say which, write the text (author mode)
+or `HOLD` and ask (reviewer mode). Do not PUT the text on the host
+unless authorized.
 
 Then open the URL. Read the acceptance criteria. Map each criterion
 to evidence in the diff or the verification steps. An unmapped
@@ -405,6 +476,10 @@ grade is `READY` so a human can finish them.
     fallback when an internal or private source is required.
 16. Climb this contract with the harness below. One change per loop.
     Never treat a green harness as Approve.
+17. Ask for the story URL before you open a branch. If a closer
+    already exists, stay on it and confirm which story it closes.
+    If the work item is virgin, open one branch and one MR that
+    closes it, then hill-climb until the Definition of Done is met.
 
 ## Review habits
 
